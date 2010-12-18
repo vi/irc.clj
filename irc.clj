@@ -14,7 +14,7 @@
 
 (defn greet [newuser]
  (ircmsg newuser "001" "Welcome to _Vi's Clojure IRC \"server\"")
- (ircmsg newuser "005" "TOPICLEN=65536 PREFIX=(ov)@+ NETWORK=demo CHANTYPES=# : are supported by this demo") 
+ (ircmsg newuser "005" "PREFIX=(ov)@+ NETWORK=demo CHANTYPES=# : are supported by this demo") 
  (ircmsg newuser "251" ":There are %d users on the server." 0)
  (ircmsg newuser "254" "%d :channels formed" 0)
  (ircmsg newuser "375" "MoTH"))
@@ -68,7 +68,7 @@
 	  (binding [*out* (get (get usrs ruserid) :out)] 
 	   (ircmsg2 user "PRIVMSG" recepient message) (flush) )
 	 (catch Exception e (.printStackTrace e)))
-	 (ircmsg user "401" ":No such nick/channel")))
+	 (ircmsg user "401" "%s :No such nick/channel" recepient)))
        (ircmsg user "412" ":There should be exactly two arguments for PRIVMSG")))
     (defmethod cmd "USER" [user cmd & args])
     (defmethod cmd "QUIT" [user cmd & args])
