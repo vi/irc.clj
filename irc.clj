@@ -1,6 +1,8 @@
 (import '[java.io BufferedReader InputStreamReader OutputStreamWriter])
 (use 'clojure.contrib.server-socket)
-(use 'clojure.contrib.string)
+(require 'clojure.contrib.string )
+(use '[clojure.contrib.string :only [split join upper-case lower-case trim blank?]])
+
 (defn log [& args] (. java.lang.System/out println (apply str (interpose "|" args))))
 (defn ircmsg [user code text & args]
  (print (format ":irc.clj %s %s %s\r\r\n" code user (apply format text args))))
@@ -32,7 +34,7 @@
 	 already-present (dosync
 	  (if (contains? @users userid)
 	    true
-	    (do (alter users #(conj %1 {userid {:nick user, :out *out*, :userid userid}})) false)
+	    (do (alter users #(conj %1 {userid {:nick newuser, :out *out*, :userid userid}})) false)
 	    ))
 	 ]
 	 (if already-present
@@ -42,9 +44,19 @@
 	    (do 
 	     (if (= user "*")
 		(greet newuser)
-		(do
-		    (ircmsg2 user "NICK" newuser)
-		    (unregister-user user)))
+		(let [users (dosync
+			     (alter users #(dissoc %1 (get-userid user)))
+			     @users)]
+		    (doall (map 
+			    #(try 
+				(let [
+				 userinfo (second %1)
+				 writer (get userinfo :out)]
+				 (log "debug" userinfo)
+				 (binding [*out* writer] (ircmsg2 user "NICK" newuser) (flush))
+				)
+				(catch Exception e (.printStackTrace e)))
+			    users))))
 	     newuser)))
 	(do
 	 (ircmsg user "432" "%s :Erroneous Nickname: Nickname should match [][{}\\|_^a-zA-Z][][{}\\|_^a-zA-Z0-9]{0,29}" newuser)
