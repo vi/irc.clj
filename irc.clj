@@ -3,7 +3,7 @@
 (require 'clojure.contrib.string )
 (use '[clojure.contrib.string :only [split join upper-case lower-case trim blank?]])
 
-(defn log [& args] (. java.lang.System/out println (apply str (interpose "|" args))))
+(defn log [& args] (. java.lang.System/out println (apply str (interpose "|\t" args))))
 (defn ircmsg [user code text & args]
  (locking *out* (print (format ":irc.clj %s %s %s\r\r\n" code user (apply format text args)))))
 (defn ^{:private true} ircmsg2-impl [from cmd msg]
@@ -65,8 +65,8 @@
        (let [recepient (first args), message (second args), ruserid (get-userid recepient)] 
 	(if (= (first ruserid) \#)
 	 (let [chs (dosync @channels)]
-	  (if (contains? ruserid chs)
-	   (doall (map #(try-output-to (get %1 :out) (ircmsg2 user "PRIVMSG" recepient message)) (get chs ruserid)))
+	  (if (contains? chs ruserid)
+	   (doall (map #(try-output-to (get (get (dosync @users) %1) :out) (ircmsg2 user "PRIVMSG" recepient message)) (get chs ruserid)))
 	   (ircmsg user "401" "%s :No such nick/channel" recepient)))
 	 (let [usrs (dosync @users)]
 	  (if (contains? usrs ruserid)
