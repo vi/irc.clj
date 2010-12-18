@@ -86,7 +86,10 @@
 	 (let [chs (dosync @channels), ch (get chs channel)]
 	  (doall (map 
 		  #(try-output-to (get (dosync (get @users (get-userid %1))) :out)
-		      (ircmsg2 user "JOIN" channel)) ch))))
+		      (ircmsg2 user "JOIN" channel)) ch))
+	  (ircmsg user "353" "@ %s :%s" channel (join " " ch))
+	  (ircmsg user "366" "%s :End of /NAMES list." channel)
+	  ))
 	(ircmsg user "479" "%s :Illegal channel name" channel) ))
       (ircmsg user "412" ":There should be exactly one argument for JOIN")))
     (defmethod cmd "USER" [user cmd & args])
