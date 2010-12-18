@@ -8,8 +8,8 @@
   (println ":irc.clj 001 * Welcome to _Vi's Clojure IRC \"server\"")
   (println ":irc.clj 005 * TOPICLEN=65536 PREFIX=(ov)@+ NETWORK=demo CHANTYPES=# : are supported by this demo")
   (println ":irc.clj 251 * :There are %d users on the server.")
-  (println ":irc.clj 254 * %d :channels formed\n")
-  (println ":irc.clj 375 * MoTH\n")
+  (println ":irc.clj 254 * %d :channels formed")
+  (println ":irc.clj 375 * MoTH")
 )
 (defmethod cmd :default [cmd & args] 
     (println (format ":irc.clj 421 * %s :Unknown command" cmd))
