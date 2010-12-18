@@ -7,8 +7,8 @@
 (defn ircmsg [user code text & args]
  (print (format ":irc.clj %s %s %s\r\r\n" code user (apply format text args))))
 (defn ircmsg2 
- ([from cmd rest] (print (format ":%s %s :%s\r\r\n" from cmd rest)))
- ([from cmd farg & args] (print (format ":%s %s %s :%s\r\r\n" from cmd (join " " (cons farg (butlast args))) (last args)))))
+ ([from cmd rest] (print (format ":%s %s :%s\r\r\n" from cmd rest)) (flush))
+ ([from cmd farg & args] (print (format ":%s %s %s :%s\r\r\n" from cmd (join " " (cons farg (butlast args))) (last args))) (flush)))
 (def users (ref {}))
 (def channels (ref {}))
 
@@ -52,7 +52,7 @@
 				(let [
 				 userinfo (second %1)
 				 writer (get userinfo :out)]
-				 (binding [*out* writer] (ircmsg2 user "NICK" newuser) (flush))
+				 (binding [*out* writer] (ircmsg2 user "NICK" newuser))
 				)
 				(catch Exception e (.printStackTrace e)))
 			    users))))
@@ -66,10 +66,26 @@
 	(if (contains? usrs ruserid)
 	 (try 
 	  (binding [*out* (get (get usrs ruserid) :out)] 
-	   (ircmsg2 user "PRIVMSG" recepient message) (flush) )
+	   (ircmsg2 user "PRIVMSG" recepient message))
 	 (catch Exception e (.printStackTrace e)))
 	 (ircmsg user "401" "%s :No such nick/channel" recepient)))
        (ircmsg user "412" ":There should be exactly two arguments for PRIVMSG")))
+    (defmethod cmd "JOIN" [user cmd & args]
+     (if (= (count args) 1)
+       (let [channel (lower-case (trim (first args)))]
+        (if (re-find #"^#[\#\]\[{}\\|_^a-zA-Z0-9]{0,29}$" channel)
+;PART #dsfsdf
+;:pratchett.freenode.net 403 _VI2 #dsfsdf :No such channel
+;PART #freenode
+;:pratchett.freenode.net 442 _VI2 #freenode :You're not on that channel
+	 (do (dosync (alter channels (fn[chs] (update-in chs [channel] #(conj (set %1) user))))) 
+	  (let [chs (dosync @channels), ch (get chs channel)]
+	   (doall (map #(try 
+                  (let [u (dosync (get @users (get-userid %1)))]
+		   (binding [*out* (get u :out)] (ircmsg2 user "JOIN" channel)))
+		  (catch Exception e (.printStackTrace e))) ch))))
+         (ircmsg user "479" "%s :Illegal channel name" channel) ))
+       (ircmsg user "412" ":There should be exactly one argument for JOIN")))
     (defmethod cmd "USER" [user cmd & args])
     (defmethod cmd "QUIT" [user cmd & args])
     (defmethod cmd :default [user cmd & args] 
