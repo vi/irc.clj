@@ -25,7 +25,7 @@
 	 already-present (dosync
 	  (if (contains? @users userid)
 	    true
-	    (do (alter users #(conj %1 {userid {:name user, :port nil}})) false)
+	    (do (alter users #(conj %1 {userid {:nick user, :out *out*, :userid userid}})) false)
 	    ))
 	 ]
 	 (if already-present
@@ -75,7 +75,7 @@
 	   (loop [user "*"]
 	    (let [line (read-line)]
 	     (when line
-	      (log line)
+	      (log user line)
 	      (let [user (process-user-input user line)]
 	       (flush)
 	       (recur user))
