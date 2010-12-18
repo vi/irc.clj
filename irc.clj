@@ -20,12 +20,9 @@
 
 (defn process-user-input [^String line] 
  (when-let [result (re-find #"(\w+)(.*)?" line)] 
-  (log "result" result)
   (let [command (upper-case (nth result 1))
 	params (trim (nth result 2))]
-    (log (format "command=\"%s\" params=\"%s\"" command params))
     (let [final-parameter-results (re-find #"(.*):(.*)" params)]
-     (log "final-parameter-results" final-parameter-results)
      (if final-parameter-results 
       (if (blank? (nth final-parameter-results 1))
 	(cmd command (nth final-parameter-results 2))
