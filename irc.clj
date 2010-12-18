@@ -24,6 +24,12 @@
  (let [userid (get-userid user)]
     (dosync
      (alter users #(dissoc %1 userid)))))
+(defmacro try-output-to [writer# & code] 
+ `(try 
+     (binding [*out* ~writer#] 
+      ~@code)
+     (catch Exception e# (.printStackTrace e#))))
+
 (defmulti cmd (fn [^String user cmd & args] cmd))
     (defmethod cmd "NICK" [user _ & args]
      (if (empty? args)
@@ -39,54 +45,49 @@
 	    ))
 	 ]
 	 (if already-present
-	    (do 
-	     (ircmsg user "433" "%s :Nickname already in use." newuser)
-	     user)
-	    (do 
-	     (if (= user "*")
-		(greet newuser)
-		(let [users (dosync
-			     (alter users #(dissoc %1 (get-userid user)))
-			     @users)]
-		    (doall (map 
-			    #(try 
-				(let [
-				 userinfo (second %1)
-				 writer (get userinfo :out)]
-				 (binding [*out* writer] (ircmsg2 user "NICK" newuser))
-				)
-				(catch Exception e (.printStackTrace e)))
-			    users))))
-	     newuser)))
+	  (do 
+	   (ircmsg user "433" "%s :Nickname already in use." newuser)
+	   user)
+	  (do 
+	   (if (= user "*")
+	    (greet newuser)
+	    (let [users (dosync (alter users #(dissoc %1 (get-userid user))) @users)]
+	     (doall (map 
+		     #(try-output-to (get (second %1) :out) 
+			 (ircmsg2 user "NICK" newuser))
+	      users))))
+	   newuser)))
 	(do
 	 (ircmsg user "432" "%s :Erroneous Nickname: Nickname should match [][{}\\|_^a-zA-Z][][{}\\|_^a-zA-Z0-9]{0,29}" newuser)
 	 user)))))
     (defmethod cmd "PRIVMSG" [user cmd & args]
      (if (= (count args) 2)
-       (let [recepient (first args), message (second args), ruserid (get-userid recepient), usrs (dosync @users)]
-	(if (contains? usrs ruserid)
-	 (try 
-	  (binding [*out* (get (get usrs ruserid) :out)] 
-	   (ircmsg2 user "PRIVMSG" recepient message))
-	 (catch Exception e (.printStackTrace e)))
-	 (ircmsg user "401" "%s :No such nick/channel" recepient)))
+       (let [recepient (first args), message (second args), ruserid (get-userid recepient)] 
+	(if (= (first ruserid) \#)
+	 (let [chs (dosync @channels)]
+	  ;;;
+	  )
+	 (let [usrs (dosync @users)]
+	  (if (contains? usrs ruserid)
+	   (try-output-to (get (get usrs ruserid) :out) 
+	     (ircmsg2 user "PRIVMSG" recepient message))
+	   (ircmsg user "401" "%s :No such nick/channel" recepient)))))
        (ircmsg user "412" ":There should be exactly two arguments for PRIVMSG")))
     (defmethod cmd "JOIN" [user cmd & args]
      (if (= (count args) 1)
-       (let [channel (lower-case (trim (first args)))]
-        (if (re-find #"^#[\#\]\[{}\\|_^a-zA-Z0-9]{0,29}$" channel)
-;PART #dsfsdf
-;:pratchett.freenode.net 403 _VI2 #dsfsdf :No such channel
-;PART #freenode
-;:pratchett.freenode.net 442 _VI2 #freenode :You're not on that channel
-	 (do (dosync (alter channels (fn[chs] (update-in chs [channel] #(conj (set %1) user))))) 
-	  (let [chs (dosync @channels), ch (get chs channel)]
-	   (doall (map #(try 
-                  (let [u (dosync (get @users (get-userid %1)))]
-		   (binding [*out* (get u :out)] (ircmsg2 user "JOIN" channel)))
-		  (catch Exception e (.printStackTrace e))) ch))))
-         (ircmsg user "479" "%s :Illegal channel name" channel) ))
-       (ircmsg user "412" ":There should be exactly one argument for JOIN")))
+      (let [channel (lower-case (trim (first args)))]
+       (if (re-find #"^#[\#\]\[{}\\|_^a-zA-Z0-9]{0,29}$" channel)
+	;PART #dsfsdf
+	;:pratchett.freenode.net 403 _VI2 #dsfsdf :No such channel
+	;PART #freenode
+	;:pratchett.freenode.net 442 _VI2 #freenode :You're not on that channel
+	(do (dosync (alter channels (fn[chs] (update-in chs [channel] #(conj (set %1) user))))) 
+	 (let [chs (dosync @channels), ch (get chs channel)]
+	  (doall (map 
+		  #(try-output-to (get (dosync (get @users (get-userid %1))) :out)
+		      (ircmsg2 user "JOIN" channel)) ch))))
+	(ircmsg user "479" "%s :Illegal channel name" channel) ))
+      (ircmsg user "412" ":There should be exactly one argument for JOIN")))
     (defmethod cmd "USER" [user cmd & args])
     (defmethod cmd "QUIT" [user cmd & args])
     (defmethod cmd :default [user cmd & args] 
