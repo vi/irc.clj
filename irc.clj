@@ -27,8 +27,12 @@
     (let [final-parameter-results (re-find #"(.*):(.*)" params)]
      (log "final-parameter-results" final-parameter-results)
      (if final-parameter-results 
-      (apply cmd command (concat (split #"\s+" (nth final-parameter-results 1)) [(nth final-parameter-results 2)]))
-      (apply cmd command (split #"\s+" params))
+      (if (blank? (nth final-parameter-results 1))
+	(cmd command (nth final-parameter-results 2))
+	(apply cmd (concat [command] (split #"\s+" (nth final-parameter-results 1)) [(nth final-parameter-results 2)])))
+      (if (blank? params)
+	(cmd command)
+	(apply cmd (concat [command] (split #"\s+" params))))
      )
     )
   ))
