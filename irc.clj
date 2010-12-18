@@ -65,8 +65,9 @@
        (let [recepient (first args), message (second args), ruserid (get-userid recepient)] 
 	(if (= (first ruserid) \#)
 	 (let [chs (dosync @channels)]
-	  ;;;
-	  )
+	  (if (contains? ruserid chs)
+	   (doall (map #(try-output-to (get %1 :out) (ircmsg2 user "PRIVMSG" recepient message)) (get chs ruserid)))
+	   (ircmsg user "401" "%s :No such nick/channel" recepient)))
 	 (let [usrs (dosync @users)]
 	  (if (contains? usrs ruserid)
 	   (try-output-to (get (get usrs ruserid) :out) 
