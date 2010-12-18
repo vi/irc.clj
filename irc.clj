@@ -4,7 +4,9 @@
 (defn log [& args] (. java.lang.System/out println (apply str (interpose "|" args))))
 (defn ircmsg [user code text & args]
  (print (format ":irc.clj %s %s %s\r\r\n" code user (apply format text args))))
-
+(defn ircmsg2 
+ ([from cmd rest] (print (format ":%s %s :%s\r\r\n" from cmd rest)))
+ ([from cmd farg & args] (print (format ":%s %s %s :%s\r\r\n" from cmd (join " " (cons farg (butlast args))) (last args)))))
 (def users (ref {}))
 (def channels (ref {}))
 
@@ -14,6 +16,11 @@
  (ircmsg newuser "251" ":There are %d users on the server." 0)
  (ircmsg newuser "254" "%d :channels formed" 0)
  (ircmsg newuser "375" "MoTH"))
+(defn get-userid [nick] (lower-case nick))
+(defn unregister-user [user]
+ (let [userid (get-userid user)]
+    (dosync
+     (alter users #(dissoc %1 userid)))))
 (defmulti cmd (fn [^String user cmd & args] cmd))
     (defmethod cmd "NICK" [user _ & args]
      (if (empty? args)
@@ -21,7 +28,7 @@
       (let [newuser (first args)]
        (if (re-find #"^[\]\[{}\\|_^a-zA-Z][\]\[{}\\|_^a-zA-Z0-9]{0,29}$" newuser) 
 	(let [
-	 userid (lower-case newuser)
+	 userid (get-userid newuser)
 	 already-present (dosync
 	  (if (contains? @users userid)
 	    true
@@ -33,12 +40,17 @@
 	     (ircmsg user "433" "%s :Nickname already in use." newuser)
 	     user)
 	    (do 
-	     (greet newuser)
+	     (if (= user "*")
+		(greet newuser)
+		(do
+		    (ircmsg2 user "NICK" newuser)
+		    (unregister-user user)))
 	     newuser)))
 	(do
 	 (ircmsg user "432" "%s :Erroneous Nickname: Nickname should match [][{}\\|_^a-zA-Z][][{}\\|_^a-zA-Z0-9]{0,29}" newuser)
 	 user)))))
     (defmethod cmd "USER" [user cmd & args])
+    (defmethod cmd "QUIT" [user cmd & args])
     (defmethod cmd :default [user cmd & args] 
      (ircmsg user "421" "%s: Unknown command" cmd))
     (defmethod cmd "TEST" [user & args]
@@ -74,14 +86,13 @@
 	   (flush)
 	   (loop [user "*"]
 	    (let [line (read-line)]
-	     (when line
-	      (log user line)
-	      (let [user (process-user-input user line)]
-	       (flush)
-	       (recur user))
-	     ) ; when input
-	    ) ; read-line
-	   )))]
+	     (if line
+	      (do
+	       (log user line)
+	       (let [user (process-user-input user line)]
+		(flush)
+		(recur user)))
+	      (unregister-user user))))))]
   (create-server 6667 irc)))
 
 (def my-server (irc-server))
