@@ -60,6 +60,16 @@
 	(do
 	 (ircmsg user "432" "%s :Erroneous Nickname: Nickname should match [][{}\\|_^a-zA-Z][][{}\\|_^a-zA-Z0-9]{0,29}" newuser)
 	 user)))))
+    (defmethod cmd "PRIVMSG" [user cmd & args]
+     (if (= (count args) 2)
+       (let [recepient (first args), message (second args), ruserid (get-userid recepient), usrs (dosync @users)]
+	(if (contains? usrs ruserid)
+	 (try 
+	  (binding [*out* (get (get usrs ruserid) :out)] 
+	   (ircmsg2 user "PRIVMSG" recepient message) (flush) )
+	 (catch Exception e (.printStackTrace e)))
+	 (ircmsg user "401" ":No such nick/channel")))
+       (ircmsg user "412" ":There should be exactly two arguments for PRIVMSG")))
     (defmethod cmd "USER" [user cmd & args])
     (defmethod cmd "QUIT" [user cmd & args])
     (defmethod cmd :default [user cmd & args] 
