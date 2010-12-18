@@ -6,34 +6,30 @@
  (print (format ":irc.clj %s %s %s\r\r\n" code user (apply format text args))))
 
 (defmulti cmd (fn [^String user cmd & args] cmd))
-(defmethod cmd "NICK" [user _ newuser & args]
-  (if (re-find #"^[\]\[{}\\|_^a-zA-Z][\]\[{}\\|_^a-zA-Z0-9]{0,29}$" newuser) 
-   (do
-      (ircmsg newuser "001" "Welcome to _Vi's Clojure IRC \"server\"")
-      (ircmsg newuser "005" "TOPICLEN=65536 PREFIX=(ov)@+ NETWORK=demo CHANTYPES=# : are supported by this demo") 
-      (ircmsg newuser "251" ":There are %d users on the server." 0)
-      (ircmsg newuser "254" "%d :channels formed" 0)
-      (ircmsg newuser "375" "MoTH")                                                                               
-      newuser
-   )
-   (do
-     (ircmsg user "432" "%s :Erroneous Nickname: Illegal characters" newuser)
-     user
-   )
-  )
-)
+(defmethod cmd "NICK" [user _ & args]
+  (if (empty? args)
+    (do (ircmsg user "431" ":No nickname given") user)
+    (let [newuser (first args)]
+      (if (re-find #"^[\]\[{}\\|_^a-zA-Z][\]\[{}\\|_^a-zA-Z0-9]{0,29}$" newuser) 
+       (do
+          (ircmsg newuser "001" "Welcome to _Vi's Clojure IRC \"server\"")
+          (ircmsg newuser "005" "TOPICLEN=65536 PREFIX=(ov)@+ NETWORK=demo CHANTYPES=# : are supported by this demo") 
+          (ircmsg newuser "251" ":There are %d users on the server." 0)
+          (ircmsg newuser "254" "%d :channels formed" 0)
+          (ircmsg newuser "375" "MoTH")                                                                               
+          newuser)
+       (do
+         (ircmsg user "432" "%s :Erroneous Nickname: Nickname should match [][{}\\|_^a-zA-Z][][{}\\|_^a-zA-Z0-9]{0,29}" newuser)
+         user)))))
+(defmethod cmd "USER" [user cmd & args])
 (defmethod cmd :default [user cmd & args] 
-    (ircmsg user "421" "%s: Unknown command" cmd)
-)
+    (ircmsg user "421" "%s: Unknown command" cmd))
 (defmethod cmd "TEST" [user & args]
-    (doall (map #(ircmsg user "421" "TEST :Parameter is \"%s\"" %) args))
-)
+    (doall (map #(ircmsg user "421" "TEST :Parameter is \"%s\"" %) args)))
 (defmethod cmd "PING" [user _ whom & args]
     (if (= whom "irc.clj")
     (println ":irc.clj PONG irc.lcj :irc.clj")
-    nil ; not implemented
-    )
-)
+    nil #_(not implemented) ))
 
 (defn process-user-input [user ^String line] 
  (let [result (re-find #"(\w+)(.*)?" line)] 
