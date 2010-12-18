@@ -52,7 +52,6 @@
 				(let [
 				 userinfo (second %1)
 				 writer (get userinfo :out)]
-				 (log "debug" userinfo)
 				 (binding [*out* writer] (ircmsg2 user "NICK" newuser) (flush))
 				)
 				(catch Exception e (.printStackTrace e)))
