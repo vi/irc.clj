@@ -2,9 +2,12 @@
 (use 'clojure.contrib.server-socket)
 (use 'clojure.contrib.string)
 (defn log [& args] (. java.lang.System/out println (apply str (interpose "|" args))))
+(defn ircmsg [user code text & args]
+ (print (format ":irc.clj %s %s %s\r\r\n" code user (apply format text args))))
 
 (defmulti cmd (fn [^String user cmd & args] cmd))
 (defmethod cmd "NICK" [user _ & args]
+  (ircmsg user "001" "Welcome to _Vi's Clojure IRC \"server\"")
   (println ":irc.clj 001 * Welcome to _Vi's Clojure IRC \"server\"")
   (println ":irc.clj 005 * TOPICLEN=65536 PREFIX=(ov)@+ NETWORK=demo CHANTYPES=# : are supported by this demo")
   (println ":irc.clj 251 * :There are %d users on the server.")
