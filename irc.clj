@@ -5,10 +5,11 @@
 
 (defn log [& args] (. java.lang.System/out println (apply str (interpose "|" args))))
 (defn ircmsg [user code text & args]
- (print (format ":irc.clj %s %s %s\r\r\n" code user (apply format text args))))
-(defn ircmsg2 
- ([from cmd rest] (print (format ":%s %s :%s\r\r\n" from cmd rest)) (flush))
- ([from cmd farg & args] (print (format ":%s %s %s :%s\r\r\n" from cmd (join " " (cons farg (butlast args))) (last args))) (flush)))
+ (locking *out* (print (format ":irc.clj %s %s %s\r\r\n" code user (apply format text args)))))
+(defn ^{:private true} ircmsg2-impl [from cmd msg]
+ (locking *out* (print (format ":%s %s %s" from cmd msg))))
+(defn ircmsg2 [from cmd & args] 
+ (locking *out* (print (format ":%s %s %s :%s\r\r\n" from cmd (join " " (butlast args)) (last args))) (flush)))
 (def users (ref {}))
 (def channels (ref {}))
 
