@@ -17,6 +17,12 @@
 (defmethod cmd "TEST" [& args]
     (doall (map #(println (format ":irc.clj 421 * TEST :Parameter is \"%s\"" %)) args))
 )
+(defmethod cmd "PING" [_ whom & args]
+    (if (= whom "irc.clj")
+    (println ":irc.clj PONG irc.lcj :irc.clj")
+    nil ; not implemented
+    )
+)
 
 (defn process-user-input [^String line] 
  (when-let [result (re-find #"(\w+)(.*)?" line)] 
