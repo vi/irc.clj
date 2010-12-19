@@ -26,11 +26,11 @@
  (ircmsg newuser "254" "%d :channels formed" 0)
  (ircmsg newuser "375" "MoTH"))
 (defn get-userid [nick] (lower-case nick))
-    (defn unregister-user [user]
-     (let [userid (get-userid user)
-      usrs (dosync (alter users #(dissoc %1 userid)) @users)]
-      (doall (map #(try-output-to (get (second %1) :out) 
-		    (ircmsg2 user "QUIT" user "Connection closed")) usrs))))
+(defn unregister-user [user]
+ (let [userid (get-userid user)
+  usrs (dosync (alter users #(dissoc %1 userid)) @users)]
+  (doall (map #(try-output-to (get (second %1) :out) 
+		(ircmsg2 user "QUIT" user "Connection closed")) usrs))))
 (defmulti cmd (fn [^String user cmd & args] cmd))
     (defmethod cmd "NICK" [user _ & args]
      (if (empty? args)
@@ -52,11 +52,13 @@
 	  (do 
 	   (if (= user "*")
 	    (greet newuser)
-	    (let [users (dosync (alter users #(dissoc %1 (get-userid user))) @users)]
+	    (let [olduserid (get-userid user)
+	     users (dosync (alter users #(dissoc %1 olduserid)) @users)]
 	     (doall (map 
 		     #(try-output-to (get (second %1) :out) 
 			 (ircmsg2 user "NICK" newuser))
-	      users))))
+	      users))
+	      (dosync (alter channels #(into {} (for [[k v] %1] [k (if (contains? v olduserid) (conj (disj v olduserid) userid) v)]))))))
 	   newuser)))
 	(do
 	 (ircmsg user "432" "%s :Erroneous Nickname: Nickname should match [][{}\\|_^a-zA-Z][][{}\\|_^a-zA-Z0-9]{0,29}" newuser)
