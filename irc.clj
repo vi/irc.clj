@@ -103,20 +103,22 @@
 	(do
 	 (irc-reply user "432" "%s :Erroneous Nickname: Nickname should match [][{}\\|_^a-zA-Z][][{}\\|_^a-zA-Z0-9]{0,29}" newuser)
 	 user)))))
-    (defmethod cmd "PRIVMSG" [user cmd & args]
-     (if (= (count args) 2)
-       (let [recepient (first args), message (second args), ruser-id (get-user-id recepient)] 
-	(if (= (first ruser-id) \#)
-	 (let [chs (dosync @channels)]
-	  (if (contains? chs ruser-id)
-	   (channel-multicast (get chs ruser-id) #(irc-event user "PRIVMSG" recepient message) (get-user-id user))
-	   (irc-reply user "401" "%s :No such nick/channel" recepient)))
-	 (let [usrs (dosync @users)]
-	  (if (contains? usrs ruser-id)
-	   (try-output-to (get (get usrs ruser-id) :out) 
-	     (irc-event user "PRIVMSG" recepient message))
-	   (irc-reply user "401" "%s :No such nick/channel" recepient)))))
-       (irc-reply user "412" ":There should be exactly two arguments for PRIVMSG")))
+    (defmethod cmd "PRIVMSG" 
+     ([user cmd recepient message]
+      (let [ruser-id (get-user-id recepient)] 
+       (if (= (first ruser-id) \#)
+	(let [chs (dosync @channels)]
+	 (if (contains? chs ruser-id)
+	  (channel-multicast (get chs ruser-id) #(irc-event user "PRIVMSG" recepient message) (get-user-id user))
+	  (irc-reply user "401" "%s :No such nick/channel" recepient)))
+	(let [usrs (dosync @users)]
+	 (if (contains? usrs ruser-id)
+	  (try-output-to (get (get usrs ruser-id) :out) 
+	   (irc-event user "PRIVMSG" recepient message))
+	  (irc-reply user "401" "%s :No such nick/channel" recepient))))))
+      ([user cmd] (irc-reply user "412" ":Not enought arguments for PRIVMSG"))
+      ([user cmd recepient] (irc-reply user "412" ":Not enought arguments for PRIVMSG"))
+      ([user cmd recepient message & args] (irc-reply user "412" ":Extra arguments for PRIVMSG")))
     (defmethod cmd "JOIN" 
      ([user cmd channel-name]
       (let [channel (get-user-id channel-name)]
@@ -131,24 +133,26 @@
 	  (irc-reply user "366" "%s :End of /NAMES list." channel)
 	  ))
 	(irc-reply user "479" "%s :Illegal channel name" channel) )))
-      ([user cmd] (irc-reply user "412" ":Not anought arguments for JOIN"))
+      ([user cmd] (irc-reply user "412" ":Not enought arguments for JOIN"))
       ([user cmd channel & args] (irc-reply user "412" ":Extra arguments for JOIN")))
-    (defmethod cmd "PART" [user cmd & args]
-      (if (>= (count args) 1)
-       (let [channel (get-user-id (first args)), user-id (get-user-id user)
-        result (part-channel! user-id channel)]
-	(if result
-	 (broadcast #(irc-event user "PART" channel "User have left this channel"))
-	 (irc-reply user "403" (format "%s :No such channel" channel))))
-       (irc-reply user "412" ":Not enough arguments for PART")))
-    (defmethod cmd "TOPIC" [user cmd & args]
-      (if (= (count args) 2)
-       (let [channel (get-user-id (first args)), new-topic (second args)
-        result (update-channel-topic! channel new-topic)]
-	(if result
-	 (broadcast #(irc-event user "TOPIC" channel new-topic))
-	 (irc-reply user "403" (format "%s :No such channel" channel))))
-       (irc-reply user "412" ":Invalid arguments for TOPIC")))
+    (defmethod cmd "PART" 
+     ([user cmd channel-name message]
+       (let [channel (get-user-id channel-name), user-id (get-user-id user)]
+	(if(part-channel! user-id channel) 
+	 (broadcast #(irc-event user "PART" channel message))
+	 (irc-reply user "403" "%s :No such channel" channel))))
+      ([user cmd] (irc-reply user "412" ":Not enought arguments for PART"))
+      ([user cmd channel message & args] (irc-reply user "412" ":Extra arguments for PART"))
+      ([user cmd2 channel] (cmd user "PART" channel "User have left this channel")))
+    (defmethod cmd "TOPIC" 
+     ([user cmd channel-name new-topic]
+      (let [channel (get-user-id channel-name)]
+       (if (update-channel-topic! channel new-topic)
+	(broadcast #(irc-event user "TOPIC" channel new-topic))
+	(irc-reply user "403" (format "%s :No such channel" channel)))))
+      ([user cmd] (irc-reply user "412" ":Not enought arguments for TOPIC"))
+      ([user cmd channel] (irc-reply user "412" ":Not enought arguments for TOPIC"))
+      ([user cmd channel topic & args] (irc-reply user "412" ":Extra arguments for TOPIC")))
     (defmethod cmd "USER" [user cmd & args])
     (defmethod cmd "QUIT" [user cmd & args])
     (defmethod cmd :default [user cmd & args] 
