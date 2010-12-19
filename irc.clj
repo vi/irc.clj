@@ -30,7 +30,8 @@
  (let [userid (get-userid user)
   usrs (dosync (alter users #(dissoc %1 userid)) @users)]
   (doall (map #(try-output-to (get (second %1) :out) 
-		(ircmsg2 user "QUIT" user "Connection closed")) usrs))))
+		(ircmsg2 user "QUIT" user "Connection closed")) usrs))
+  (dosync (alter channels #(into {} (for [[k v] %1] [k (disj v userid)])))) ))
 (defmulti cmd (fn [^String user cmd & args] cmd))
     (defmethod cmd "NICK" [user _ & args]
      (if (empty? args)
