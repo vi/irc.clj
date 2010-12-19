@@ -13,6 +13,12 @@
 (def users (ref {}))
 (def channels (ref {}))
 
+(defmacro try-output-to [writer# & code] 
+ `(try 
+     (binding [*out* ~writer#] 
+      ~@code)
+     (catch Exception e# (.printStackTrace e#))))
+
 (defn greet [newuser]
  (ircmsg newuser "001" "Welcome to _Vi's Clojure IRC \"server\"")
  (ircmsg newuser "005" "PREFIX=(ov)@+ NETWORK=demo CHANTYPES=# : are supported by this demo") 
@@ -20,16 +26,11 @@
  (ircmsg newuser "254" "%d :channels formed" 0)
  (ircmsg newuser "375" "MoTH"))
 (defn get-userid [nick] (lower-case nick))
-(defn unregister-user [user]
- (let [userid (get-userid user)]
-    (dosync
-     (alter users #(dissoc %1 userid)))))
-(defmacro try-output-to [writer# & code] 
- `(try 
-     (binding [*out* ~writer#] 
-      ~@code)
-     (catch Exception e# (.printStackTrace e#))))
-
+    (defn unregister-user [user]
+     (let [userid (get-userid user)
+      usrs (dosync (alter users #(dissoc %1 userid)) @users)]
+      (doall (map #(try-output-to (get (second %1) :out) 
+		    (ircmsg2 user "QUIT" user "Connection closed")) usrs))))
 (defmulti cmd (fn [^String user cmd & args] cmd))
     (defmethod cmd "NICK" [user _ & args]
      (if (empty? args)
