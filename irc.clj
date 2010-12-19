@@ -4,12 +4,15 @@
 (use '[clojure.contrib.string :only [split join upper-case lower-case trim blank?]])
 
 (defn log [& args] (. java.lang.System/out println (apply str (interpose "|\t" args))))
+
 (defn ircmsg [user code text & args]
  (locking *out* (print (format ":irc.clj %s %s %s\r\r\n" code user (apply format text args)))))
 (defn ^{:private true} ircmsg2-impl [from cmd msg]
- (locking *out* (print (format ":%s %s %s" from cmd msg))))
-(defn ircmsg2 [from cmd & args] 
- (locking *out* (print (format ":%s %s %s :%s\r\r\n" from cmd (join " " (butlast args)) (last args))) (flush)))
+ (locking *out* (print (format ":%s %s %s\r\r\n" from cmd msg)) (flush) ))
+(defn ircmsg2
+ ([from cmd solearg] (ircmsg2-impl from cmd (str ":" solearg)))
+ ([from cmd arg & args] (ircmsg2-impl from cmd (str (join " " (cons arg (butlast args))) " :" (last args)))))
+
 (def users (ref {}))
 (def channels (ref {}))
 
@@ -93,7 +96,7 @@
 	 (let [chs (dosync @channels), ch (get chs channel)]
 	  (doall (map 
 		  #(try-output-to (get (dosync (get @users (get-userid %1))) :out)
-		      (ircmsg2 user "JOIN" channel)) ch))
+		      (ircmsg2 user "JOIN" channel "User joined the channel")) ch))
 	  (ircmsg user "353" "@ %s :%s" channel (join " " ch))
 	  (ircmsg user "366" "%s :End of /NAMES list." channel)
 	  ))
