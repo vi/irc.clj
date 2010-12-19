@@ -100,12 +100,17 @@
       (ircmsg user "412" ":There should be exactly one argument for JOIN")))
     (defmethod cmd "PART" [user cmd & args]
       (if (>= (count args) 1)
-       (let [channel (get-userid (lower-case (trim (first args)))), userid (get-userid user)] 
-        (dosync (alter channels (fn[chs] (update-in chs [channel] #(disj %1 user)))))
-	(doall (map 
+       (let [channel (get-userid (lower-case (trim (first args)))), userid (get-userid user)
+        result (dosync 
+	    (if (contains? @channels channel)
+	     (do (alter channels (fn[chs] (update-in chs [channel] #(disj %1 user)))) true)
+	     false))]
+	(if result
+	 (doall (map 
 		#(try-output-to (get (second %1) :out) 
 		    (ircmsg2 user "PART" channel "User have left this channel"))
-		(dosync @users))))
+		(dosync @users)))
+	 (ircmsg user "403" (format "%s :No such channel" channel))))
        (ircmsg user "412" ":Not enough arguments for PART")))
     (defmethod cmd "USER" [user cmd & args])
     (defmethod cmd "QUIT" [user cmd & args])
