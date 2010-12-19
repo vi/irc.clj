@@ -5,10 +5,11 @@
 ;;;; 	    no channel modes, no ops, no bans
 ;;;; 	Straightforward algorithms, no optimisation
 ;;;; Implemented by Vitaly "_Vi" Shukela, 2010; LGPL.
-(import '[java.io BufferedReader InputStreamReader OutputStreamWriter])
-(use 'clojure.contrib.server-socket)
-(require 'clojure.contrib.string )
-(use '[clojure.contrib.string :only [split join upper-case lower-case trim blank?]])
+
+(ns irc-demo
+ (:import (java.io BufferedReader InputStreamReader OutputStreamWriter))
+ (:use clojure.contrib.server-socket)
+ (:use [clojure.contrib.string :only [split join upper-case lower-case trim blank?]]))
 
 (defn log [& args] (. java.lang.System/out println (apply str (interpose "|\t" args))))
 
@@ -83,8 +84,8 @@
   (broadcast #(irc-event user "QUIT" user "Connection closed"))
   (remove-user-from-channels user-id)))
 
-(defmulti cmd (fn [^String user cmd & args] cmd))
-    (defmethod cmd "NICK" 
+(defmulti command (fn [^String user command-name & args] command-name))
+    (defmethod command "NICK" 
      ([user _] (irc-reply user "431" ":No nickname given") user)
      ([user _ nick & args] (irc-reply user "431" ":Extra arguments for NICK") user) 
      ([user _ nick]
@@ -106,8 +107,8 @@
 	(do
 	 (irc-reply user "432" "%s :Erroneous Nickname: Nickname should match [][{}\\|_^a-zA-Z][][{}\\|_^a-zA-Z0-9]{0,29}" nick)
 	 user))))
-    (defmethod cmd "PRIVMSG" 
-     ([user cmd recepient message]
+    (defmethod command "PRIVMSG" 
+     ([user _ recepient message]
       (let [ruser-id (get-user-id recepient)] 
        (if (= (first ruser-id) \#)
 	(let [chs (dosync @channels)]
@@ -119,11 +120,11 @@
 	  (try-output-to (get (get usrs ruser-id) :out) 
 	   (irc-event user "PRIVMSG" recepient message))
 	  (irc-reply user "401" "%s :No such nick/channel" recepient))))))
-      ([user cmd] (irc-reply user "412" ":Not enought arguments for PRIVMSG"))
-      ([user cmd recepient] (irc-reply user "412" ":Not enought arguments for PRIVMSG"))
-      ([user cmd recepient message & args] (irc-reply user "412" ":Extra arguments for PRIVMSG")))
-    (defmethod cmd "JOIN" 
-     ([user cmd channel-name]
+      ([user _] (irc-reply user "412" ":Not enought arguments for PRIVMSG"))
+      ([user _ recepient] (irc-reply user "412" ":Not enought arguments for PRIVMSG"))
+      ([user _ recepient message & args] (irc-reply user "412" ":Extra arguments for PRIVMSG")))
+    (defmethod command "JOIN" 
+     ([user _ channel-name]
       (let [channel (get-user-id channel-name)]
        (if (re-find #"^#[\#\]\[{}\\|_^a-z0-9]{0,29}$" channel)
 	(do 
@@ -136,58 +137,58 @@
 	  (irc-reply user "366" "%s :End of /NAMES list." channel)
 	  ))
 	(irc-reply user "479" "%s :Illegal channel name" channel) )))
-      ([user cmd] (irc-reply user "412" ":Not enought arguments for JOIN"))
-      ([user cmd channel & args] (irc-reply user "412" ":Extra arguments for JOIN")))
-    (defmethod cmd "PART" 
-     ([user cmd channel-name message]
+      ([user _] (irc-reply user "412" ":Not enought arguments for JOIN"))
+      ([user _ channel & args] (irc-reply user "412" ":Extra arguments for JOIN")))
+    (defmethod command "PART" 
+     ([user _ channel-name message]
        (let [channel (get-user-id channel-name), user-id (get-user-id user)]
 	(if(part-channel! user-id channel) 
 	 (broadcast #(irc-event user "PART" channel message))
 	 (irc-reply user "403" "%s :No such channel" channel))))
-      ([user cmd] (irc-reply user "412" ":Not enought arguments for PART"))
-      ([user cmd channel message & args] (irc-reply user "412" ":Extra arguments for PART"))
-      ([user cmd2 channel] (cmd user "PART" channel "User have left this channel")))
-    (defmethod cmd "TOPIC" 
-     ([user cmd channel-name new-topic]
+      ([user _] (irc-reply user "412" ":Not enought arguments for PART"))
+      ([user _ channel message & args] (irc-reply user "412" ":Extra arguments for PART"))
+      ([user _ channel] (command user "PART" channel "User have left this channel")))
+    (defmethod command "TOPIC" 
+     ([user _ channel-name new-topic]
       (let [channel (get-user-id channel-name)]
        (if (update-channel-topic! channel new-topic)
 	(broadcast #(irc-event user "TOPIC" channel new-topic))
 	(irc-reply user "403" (format "%s :No such channel" channel)))))
-      ([user cmd] (irc-reply user "412" ":Not enought arguments for TOPIC"))
-      ([user cmd channel] (irc-reply user "412" ":Not enought arguments for TOPIC"))
-      ([user cmd channel topic & args] (irc-reply user "412" ":Extra arguments for TOPIC")))
-    (defmethod cmd "USER" [user cmd & args])
-    (defmethod cmd "QUIT" [user cmd & args])
-    (defmethod cmd :default [user cmd & args] 
-     (irc-reply user "421" "%s: Unknown command" cmd))
-    (defmethod cmd "TEST" [user & args]
+      ([user _] (irc-reply user "412" ":Not enought arguments for TOPIC"))
+      ([user _ channel] (irc-reply user "412" ":Not enought arguments for TOPIC"))
+      ([user _ channel topic & args] (irc-reply user "412" ":Extra arguments for TOPIC")))
+    (defmethod command "USER" [user _ & args])
+    (defmethod command "QUIT" [user _ & args])
+    (defmethod command :default [user cmd-name & args] 
+     (irc-reply user "421" "%s: Unknown command" cmd-name))
+    (defmethod command "TEST" [user & args]
      (doall (map #(irc-reply user "421" "TEST :Parameter is \"%s\"" %) args)))
-    (defmethod cmd "PING" [user _ & args]
+    (defmethod command "PING" [user _ & args]
       (println ":irc.clj PONG irc.lcj :irc.clj"))
-    (defmethod cmd "LIST" [user _ & args]
+    (defmethod command "LIST" [user _ & args]
      (doall (for [[k v] (dosync @channels)] (irc-reply user "322" (format "%s %d :%s" k (count v) (dosync (get @channel-topics k)))) ))
      (irc-reply user "323" ":End of /LIST"))
-    (defmethod cmd "DEBUG" [user _ & args]
+    (defmethod command "DEBUG" [user _ & args]
      (irc-reply user "000" (format ": Debug %s" (dosync [@users @channels @channel-topics]))))
 
-(defn process-user-input [user ^String line] 
+(defn execute-irc-command-line [user ^String line] 
  (let [result (re-find #"(\w+)(.*)?" line)] 
   (if result
    (let [
-    command (trim (upper-case (nth result 1)))
+    command-name (trim (upper-case (nth result 1)))
     params (trim (nth result 2))
     newuser (let [final-parameter-results (re-find #"(.*):(.*)" params)]
-	(if (and (= user "*") (not (or (= command "NICK") (= command "DEBUG") (= command "QUIT") (= command "PING"))))
+	(if (and (= user "*") (not (or (= command-name "NICK") (= command-name "DEBUG") (= command-name "QUIT") (= command-name "PING"))))
 	 (do (irc-reply user "451" ":You are not registered") user)
 	 (if final-parameter-results 
 	  (if (blank? (nth final-parameter-results 1))
-	   (apply cmd [user command (nth final-parameter-results 2)])
-	   (apply cmd (concat [user command] (split #"\s+" (nth final-parameter-results 1)) [(nth final-parameter-results 2)])))
+	   (apply command [user command-name (nth final-parameter-results 2)])
+	   (apply command (concat [user command-name] (split #"\s+" (nth final-parameter-results 1)) [(nth final-parameter-results 2)])))
 	  (if (blank? params)
-	   (apply cmd [user command])
-	   (apply  cmd (concat [user command] (split #"\s+" params)))))))
+	   (apply command [user command-name])
+	   (apply  command (concat [user command-name] (split #"\s+" params)))))))
     ]
-    (if (= command "NICK") newuser user))
+    (if (= command-name "NICK") newuser user))
    user)))
 
 (defn irc-server []
@@ -202,7 +203,7 @@
 	      (do
 	       (log user line)
 	       (recur (try
-		       (let [user (process-user-input user line)]
+		       (let [user (execute-irc-command-line user line)]
 			(flush)
 			user)
 		       (catch Exception e (.printStackTrace e) (irc-reply user "400" ":Error") (flush) user))))
