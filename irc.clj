@@ -50,6 +50,14 @@
 	  channel)))
  ([channel function] (channel-multicast channel function nil)))
 
+(defn remove-user! [user-id] 
+ (dosync (alter users #(dissoc %1 user-id))))
+(defn add-user! [user-id nick] "Add user. If already exists returns true"
+ (dosync
+  (if (contains? @users user-id)
+   true
+   (do (alter users #(conj %1 {user-id {:nick nick, :out *out*, :user-id user-id}})) false)
+  )))
 (defn change-nick-on-all-channels! [old-user-id new-user-id]
  (dosync (alter channels #(into {} (for [[k v] %1] [k (if (contains? v old-user-id) (conj (disj v old-user-id) new-user-id) v)])))))
 (defn join-channel! [user-id channel] "Create channel or add user to it"
@@ -75,34 +83,28 @@
   (broadcast #(irc-event user "QUIT" user "Connection closed"))
   (dosync (alter channels #(into {} (for [[k v] %1] [k (disj v user-id)])))) ))
 (defmulti cmd (fn [^String user cmd & args] cmd))
-    (defmethod cmd "NICK" [user _ & args]
-     (if (empty? args)
-      (do (irc-reply user "431" ":No nickname given") user)
-      (let [newuser (first args)]
-       (if (re-find #"^[\]\[{}\\|_^a-zA-Z][\]\[{}\\|_^a-zA-Z0-9]{0,29}$" newuser) 
-	(let [
-	 user-id (get-user-id newuser)
-	 already-present (dosync
-	  (if (contains? @users user-id)
-	    true
-	    (do (alter users #(conj %1 {user-id {:nick newuser, :out *out*, :user-id user-id}})) false)
-	    ))
-	 ]
+    (defmethod cmd "NICK" 
+     ([user _] (irc-reply user "431" ":No nickname given") user)
+     ([user _ nick & args] (irc-reply user "431" ":Extra arguments for NICK") user) 
+     ([user _ nick]
+       (if (re-find #"^[\]\[{}\\|_^a-zA-Z][\]\[{}\\|_^a-zA-Z0-9]{0,29}$" nick) 
+	(let [user-id (get-user-id nick)
+	 already-present (add-user! user-id nick)]
 	 (if already-present
 	  (do 
-	   (irc-reply user "433" "%s :Nickname already in use." newuser)
+	   (irc-reply user "433" "%s :Nickname already in use." nick)
 	   user)
 	  (do 
 	   (if (= user "*")
-	    (greet newuser)
-	    (let [old-user-id (get-user-id user)]
-	     (dosync (alter users #(dissoc %1 old-user-id)))
-	     (broadcast #(irc-event user "NICK" newuser))
+	    (greet nick) ; if it is the first "NICK" command in this session then greet user
+	    (let [old-user-id (get-user-id user)] ; else it is renaming
+	     (remove-user! old-user-id)
+	     (broadcast #(irc-event user "NICK" nick))
 	     (change-nick-on-all-channels! old-user-id user-id)))
-	   newuser)))
+	   nick)))
 	(do
-	 (irc-reply user "432" "%s :Erroneous Nickname: Nickname should match [][{}\\|_^a-zA-Z][][{}\\|_^a-zA-Z0-9]{0,29}" newuser)
-	 user)))))
+	 (irc-reply user "432" "%s :Erroneous Nickname: Nickname should match [][{}\\|_^a-zA-Z][][{}\\|_^a-zA-Z0-9]{0,29}" nick)
+	 user))))
     (defmethod cmd "PRIVMSG" 
      ([user cmd recepient message]
       (let [ruser-id (get-user-id recepient)] 
