@@ -149,9 +149,11 @@
 	     (if line
 	      (do
 	       (log user line)
-	       (let [user (process-user-input user line)]
-		(flush)
-		(recur user)))
+	       (recur (try
+		       (let [user (process-user-input user line)]
+			(flush)
+			user)
+		       (catch Exception e (.printStackTrace e) (ircmsg user "400" ":Error") (flush) user))))
 	      (unregister-user user))))))]
   (create-server 6667 irc)))
 
