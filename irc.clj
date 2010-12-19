@@ -1,3 +1,11 @@
+;;;; Demo Clojure IRC server
+;;;; Limitations:
+;;;; 	No server-server connect
+;;;; 	Only partially implemented basic commands (channel and private messages)
+;;;; 	    no channel modes or topics, no ops, no bans
+;;;; 	    no channel listing (except of "DEBUG" command)
+;;;; 	Straightforward algorithms, no optimisation
+;;;; Implemented by Vitaly "_Vi" Shukela, 2010; LGPL.
 (import '[java.io BufferedReader InputStreamReader OutputStreamWriter])
 (use 'clojure.contrib.server-socket)
 (require 'clojure.contrib.string )
