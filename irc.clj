@@ -36,7 +36,7 @@
  (irc-reply newuser "251" ":There are %d users on the server." (count (dosync @users)))
  (irc-reply newuser "254" "%d :channels formed" (count (dosync @channels)))
  (irc-reply newuser "375" "MoTH"))
-(defn get-user-id [nick] (lower-case nick))
+(defn get-user-id [nick] (lower-case (trim nick)))
 
 (defn broadcast [function] "Send message to all users"
  (doall (map #(try-output-to (get (second %1) :out) 
@@ -95,10 +95,10 @@
 	  (do 
 	   (if (= user "*")
 	    (greet newuser)
-	    (let [olduser-id (get-user-id user)]
-	     (dosync (alter users #(dissoc %1 olduser-id)))
+	    (let [old-user-id (get-user-id user)]
+	     (dosync (alter users #(dissoc %1 old-user-id)))
 	     (broadcast #(irc-event user "NICK" newuser))
-	     (change-nick-on-all-channels! olduser-id user-id)))
+	     (change-nick-on-all-channels! old-user-id user-id)))
 	   newuser)))
 	(do
 	 (irc-reply user "432" "%s :Erroneous Nickname: Nickname should match [][{}\\|_^a-zA-Z][][{}\\|_^a-zA-Z0-9]{0,29}" newuser)
@@ -134,7 +134,7 @@
       (irc-reply user "412" ":There should be exactly one argument for JOIN")))
     (defmethod cmd "PART" [user cmd & args]
       (if (>= (count args) 1)
-       (let [channel (get-user-id (lower-case (trim (first args)))), user-id (get-user-id user)
+       (let [channel (get-user-id (first args)), user-id (get-user-id user)
         result (part-channel! user-id channel)]
 	(if result
 	 (broadcast #(irc-event user "PART" channel "User have left this channel"))
@@ -142,7 +142,7 @@
        (irc-reply user "412" ":Not enough arguments for PART")))
     (defmethod cmd "TOPIC" [user cmd & args]
       (if (= (count args) 2)
-       (let [channel (get-user-id (lower-case (trim (first args)))), user-id (get-user-id user), new-topic (second args)
+       (let [channel (get-user-id (first args)), new-topic (second args)
         result (update-channel-topic! channel new-topic)]
 	(if result
 	 (broadcast #(irc-event user "TOPIC" channel new-topic))
