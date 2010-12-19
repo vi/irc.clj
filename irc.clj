@@ -60,6 +60,8 @@
   )))
 (defn change-nick-on-all-channels! [old-user-id new-user-id]
  (dosync (alter channels #(into {} (for [[k v] %1] [k (if (contains? v old-user-id) (conj (disj v old-user-id) new-user-id) v)])))))
+(defn remove-user-from-channels [user-id]
+  (dosync (alter channels #(into {} (for [[k v] %1] [k (disj v user-id)])))))
 (defn join-channel! [user-id channel] "Create channel or add user to it"
  (dosync 
   (alter channel-topics (fn [chs] (update-in chs [channel] #(if %1 %1 ""))))
@@ -75,13 +77,12 @@
    (do (alter channel-topics (fn[chs] (update-in chs [channel] (fn[_]new-topic)))) true)
    false)))
  
- 
-
 (defn unregister-user [user]
  (let [user-id (get-user-id user)]
-  (dosync (alter users #(dissoc %1 user-id)))
+  (remove-user! user-id)
   (broadcast #(irc-event user "QUIT" user "Connection closed"))
-  (dosync (alter channels #(into {} (for [[k v] %1] [k (disj v user-id)])))) ))
+  (remove-user-from-channels user-id)))
+
 (defmulti cmd (fn [^String user cmd & args] cmd))
     (defmethod cmd "NICK" 
      ([user _] (irc-reply user "431" ":No nickname given") user)
