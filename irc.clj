@@ -70,7 +70,10 @@
 	(if (= (first ruserid) \#)
 	 (let [chs (dosync @channels)]
 	  (if (contains? chs ruserid)
-	   (doall (map #(try-output-to (get (get (dosync @users) %1) :out) (ircmsg2 user "PRIVMSG" recepient message)) (get chs ruserid)))
+	   (doall (map #(when (not= %1 (get-userid user))
+			 (try-output-to (get (get (dosync @users) %1) :out) 
+			  (ircmsg2 user "PRIVMSG" recepient message))) 
+		   (get chs ruserid)))
 	   (ircmsg user "401" "%s :No such nick/channel" recepient)))
 	 (let [usrs (dosync @users)]
 	  (if (contains? usrs ruserid)
@@ -86,7 +89,7 @@
 	;:pratchett.freenode.net 403 _VI2 #dsfsdf :No such channel
 	;PART #freenode
 	;:pratchett.freenode.net 442 _VI2 #freenode :You're not on that channel
-	(do (dosync (alter channels (fn[chs] (update-in chs [channel] #(conj (set %1) user))))) 
+	(do (dosync (alter channels (fn[chs] (update-in chs [channel] #(conj (set %1) (get-userid user)))))) 
 	 (let [chs (dosync @channels), ch (get chs channel)]
 	  (doall (map 
 		  #(try-output-to (get (dosync (get @users (get-userid %1))) :out)
