@@ -3,7 +3,6 @@
 ;;;; 	No server-server connect
 ;;;; 	Only partially implemented basic commands (channel and private messages)
 ;;;; 	    no channel modes or topics, no ops, no bans
-;;;; 	    no channel listing (except of "DEBUG" command)
 ;;;; 	Straightforward algorithms, no optimisation
 ;;;; Implemented by Vitaly "_Vi" Shukela, 2010; LGPL.
 (import '[java.io BufferedReader InputStreamReader OutputStreamWriter])
@@ -128,6 +127,9 @@
      (doall (map #(ircmsg user "421" "TEST :Parameter is \"%s\"" %) args)))
     (defmethod cmd "PING" [user _ & args]
       (println ":irc.clj PONG irc.lcj :irc.clj"))
+    (defmethod cmd "LIST" [user _ & args]
+     (doall (for [[k v] (dosync @channels)] (ircmsg user "322" (format "%s %d :(Topics are not supported)" k (count v))) ))
+     (ircmsg user "323" ":End of /LIST"))
     (defmethod cmd "DEBUG" [user _ & args]
      (ircmsg user "000" (format ": Debug %s" (dosync [@users @channels]))))
 
