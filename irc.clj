@@ -105,10 +105,10 @@
      (ircmsg user "421" "%s: Unknown command" cmd))
     (defmethod cmd "TEST" [user & args]
      (doall (map #(ircmsg user "421" "TEST :Parameter is \"%s\"" %) args)))
-    (defmethod cmd "PING" [user _ whom & args]
-     (if (= whom "irc.clj")
-      (println ":irc.clj PONG irc.lcj :irc.clj")
-      nil #_(not implemented) ))
+    (defmethod cmd "PING" [user _ & args]
+      (println ":irc.clj PONG irc.lcj :irc.clj"))
+    (defmethod cmd "DEBUG" [user _ & args]
+     (ircmsg user "000" (format ": Debug %s" (dosync [@users @channels]))))
 
 (defn process-user-input [user ^String line] 
  (let [result (re-find #"(\w+)(.*)?" line)] 
@@ -117,13 +117,15 @@
     command (trim (upper-case (nth result 1)))
     params (trim (nth result 2))
     newuser (let [final-parameter-results (re-find #"(.*):(.*)" params)]
-	(if final-parameter-results 
-	 (if (blank? (nth final-parameter-results 1))
-	  (apply cmd [user command (nth final-parameter-results 2)])
-	  (apply cmd (concat [user command] (split #"\s+" (nth final-parameter-results 1)) [(nth final-parameter-results 2)])))
-	 (if (blank? params)
-	  (apply cmd [user command])
-	  (apply  cmd (concat [user command] (split #"\s+" params))))))
+	(if (and (= user "*") (not (or (= command "NICK") (= command "DEBUG") (= command "QUIT") (= command "PING"))))
+	 (do (ircmsg user "451" ":You are not registered") user)
+	 (if final-parameter-results 
+	  (if (blank? (nth final-parameter-results 1))
+	   (apply cmd [user command (nth final-parameter-results 2)])
+	   (apply cmd (concat [user command] (split #"\s+" (nth final-parameter-results 1)) [(nth final-parameter-results 2)])))
+	  (if (blank? params)
+	   (apply cmd [user command])
+	   (apply  cmd (concat [user command] (split #"\s+" params)))))))
     ]
     (if (= command "NICK") newuser user))
    user)))
