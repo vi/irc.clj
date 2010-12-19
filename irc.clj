@@ -36,13 +36,17 @@
  (irc-reply newuser "251" ":There are %d users on the server." (count (dosync @users)))
  (irc-reply newuser "254" "%d :channels formed" (count (dosync @channels)))
  (irc-reply newuser "375" "MoTH"))
-(defn get-userid [nick] (lower-case nick))
+(defn get-user-id [nick] (lower-case nick))
+
+(defn broadcast [function] "Send message to all users"
+ (doall (map #(try-output-to (get (second %1) :out) 
+	       (function)) (dosync @users))))
+
 (defn unregister-user [user]
- (let [userid (get-userid user)
-  usrs (dosync (alter users #(dissoc %1 userid)) @users)]
-  (doall (map #(try-output-to (get (second %1) :out) 
-		(irc-event user "QUIT" user "Connection closed")) usrs))
-  (dosync (alter channels #(into {} (for [[k v] %1] [k (disj v userid)])))) ))
+ (let [user-id (get-user-id user)]
+  (dosync (alter users #(dissoc %1 user-id)))
+  (broadcast #(irc-event user "QUIT" user "Connection closed"))
+  (dosync (alter channels #(into {} (for [[k v] %1] [k (disj v user-id)])))) ))
 (defmulti cmd (fn [^String user cmd & args] cmd))
     (defmethod cmd "NICK" [user _ & args]
      (if (empty? args)
@@ -50,11 +54,11 @@
       (let [newuser (first args)]
        (if (re-find #"^[\]\[{}\\|_^a-zA-Z][\]\[{}\\|_^a-zA-Z0-9]{0,29}$" newuser) 
 	(let [
-	 userid (get-userid newuser)
+	 user-id (get-user-id newuser)
 	 already-present (dosync
-	  (if (contains? @users userid)
+	  (if (contains? @users user-id)
 	    true
-	    (do (alter users #(conj %1 {userid {:nick newuser, :out *out*, :userid userid}})) false)
+	    (do (alter users #(conj %1 {user-id {:nick newuser, :out *out*, :user-id user-id}})) false)
 	    ))
 	 ]
 	 (if already-present
@@ -64,31 +68,28 @@
 	  (do 
 	   (if (= user "*")
 	    (greet newuser)
-	    (let [olduserid (get-userid user)
-	     users (dosync (alter users #(dissoc %1 olduserid)) @users)]
-	     (doall (map 
-		     #(try-output-to (get (second %1) :out) 
-			 (irc-event user "NICK" newuser))
-	      users))
-	      (dosync (alter channels #(into {} (for [[k v] %1] [k (if (contains? v olduserid) (conj (disj v olduserid) userid) v)]))))))
+	    (let [olduser-id (get-user-id user)]
+	     (dosync (alter users #(dissoc %1 olduser-id)))
+	     (broadcast #(irc-event user "NICK" newuser))
+	      (dosync (alter channels #(into {} (for [[k v] %1] [k (if (contains? v olduser-id) (conj (disj v olduser-id) user-id) v)]))))))
 	   newuser)))
 	(do
 	 (irc-reply user "432" "%s :Erroneous Nickname: Nickname should match [][{}\\|_^a-zA-Z][][{}\\|_^a-zA-Z0-9]{0,29}" newuser)
 	 user)))))
     (defmethod cmd "PRIVMSG" [user cmd & args]
      (if (= (count args) 2)
-       (let [recepient (first args), message (second args), ruserid (get-userid recepient)] 
-	(if (= (first ruserid) \#)
+       (let [recepient (first args), message (second args), ruser-id (get-user-id recepient)] 
+	(if (= (first ruser-id) \#)
 	 (let [chs (dosync @channels)]
-	  (if (contains? chs ruserid)
-	   (doall (map #(when (not= %1 (get-userid user))
+	  (if (contains? chs ruser-id)
+	   (doall (map #(when (not= %1 (get-user-id user))
 			 (try-output-to (get (get (dosync @users) %1) :out) 
 			  (irc-event user "PRIVMSG" recepient message))) 
-		   (get chs ruserid)))
+		   (get chs ruser-id)))
 	   (irc-reply user "401" "%s :No such nick/channel" recepient)))
 	 (let [usrs (dosync @users)]
-	  (if (contains? usrs ruserid)
-	   (try-output-to (get (get usrs ruserid) :out) 
+	  (if (contains? usrs ruser-id)
+	   (try-output-to (get (get usrs ruser-id) :out) 
 	     (irc-event user "PRIVMSG" recepient message))
 	   (irc-reply user "401" "%s :No such nick/channel" recepient)))))
        (irc-reply user "412" ":There should be exactly two arguments for PRIVMSG")))
@@ -98,10 +99,10 @@
        (if (re-find #"^#[\#\]\[{}\\|_^a-zA-Z0-9]{0,29}$" channel)
 	(do (dosync 
 	     (alter channel-topics (fn [chs] (update-in chs [channel] #(if %1 %1 ""))))
-	     (alter channels (fn[chs] (update-in chs [channel] #(conj (set %1) (get-userid user)))))) 
+	     (alter channels (fn[chs] (update-in chs [channel] #(conj (set %1) (get-user-id user)))))) 
 	 (let [chs (dosync @channels), ch (get chs channel)]
 	  (doall (map 
-		  #(try-output-to (get (dosync (get @users (get-userid %1))) :out)
+		  #(try-output-to (get (dosync (get @users (get-user-id %1))) :out)
 		      (irc-event user "JOIN" channel "User joined the channel")) ch))
 	  (irc-reply user "332" "%s :%s" channel (dosync (get @channel-topics channel)))
 	  ;(irc-reply user "333" "%s :none 0" channel)
@@ -112,30 +113,24 @@
       (irc-reply user "412" ":There should be exactly one argument for JOIN")))
     (defmethod cmd "PART" [user cmd & args]
       (if (>= (count args) 1)
-       (let [channel (get-userid (lower-case (trim (first args)))), userid (get-userid user)
+       (let [channel (get-user-id (lower-case (trim (first args)))), user-id (get-user-id user)
         result (dosync 
 	    (if (contains? @channels channel)
 	     (do (alter channels (fn[chs] (update-in chs [channel] #(disj %1 user)))) true)
 	     false))]
 	(if result
-	 (doall (map 
-		#(try-output-to (get (second %1) :out) 
-		    (irc-event user "PART" channel "User have left this channel"))
-		(dosync @users)))
+	 (broadcast #(irc-event user "PART" channel "User have left this channel"))
 	 (irc-reply user "403" (format "%s :No such channel" channel))))
        (irc-reply user "412" ":Not enough arguments for PART")))
     (defmethod cmd "TOPIC" [user cmd & args]
       (if (= (count args) 2)
-       (let [channel (get-userid (lower-case (trim (first args)))), userid (get-userid user), newtopic (second args)
+       (let [channel (get-user-id (lower-case (trim (first args)))), user-id (get-user-id user), newtopic (second args)
         result (dosync 
 	    (if (contains? @channels channel)
 	     (do (alter channel-topics (fn[chs] (update-in chs [channel] (fn[_]newtopic)))) true)
 	     false))]
 	(if result
-	 (doall (map 
-		#(try-output-to (get (second %1) :out) 
-		    (irc-event user "TOPIC" channel newtopic))
-		(dosync @users)))
+	 (broadcast (irc-event user "TOPIC" channel newtopic))
 	 (irc-reply user "403" (format "%s :No such channel" channel))))
        (irc-reply user "412" ":Invalid arguments for TOPIC")))
     (defmethod cmd "USER" [user cmd & args])
