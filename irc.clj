@@ -42,6 +42,15 @@
  (doall (map #(try-output-to (get (second %1) :out) 
 	       (function)) (dosync @users))))
 
+(defn channel-multicast "Send message to all channel participants (except of ignore-user)" 
+ ([channel function ignore-user]
+  (doall (map #(when (not= %1 ignore-user)
+		(try-output-to (get (get (dosync @users) %1) :out) 
+		 (function))) 
+	  channel)))
+ ([channel function] (channel-multicast channel function nil)))
+
+
 (defn unregister-user [user]
  (let [user-id (get-user-id user)]
   (dosync (alter users #(dissoc %1 user-id)))
@@ -82,10 +91,7 @@
 	(if (= (first ruser-id) \#)
 	 (let [chs (dosync @channels)]
 	  (if (contains? chs ruser-id)
-	   (doall (map #(when (not= %1 (get-user-id user))
-			 (try-output-to (get (get (dosync @users) %1) :out) 
-			  (irc-event user "PRIVMSG" recepient message))) 
-		   (get chs ruser-id)))
+	   (channel-multicast (get chs ruser-id) #(irc-event user "PRIVMSG" recepient message) (get-user-id user))
 	   (irc-reply user "401" "%s :No such nick/channel" recepient)))
 	 (let [usrs (dosync @users)]
 	  (if (contains? usrs ruser-id)
@@ -101,9 +107,7 @@
 	     (alter channel-topics (fn [chs] (update-in chs [channel] #(if %1 %1 ""))))
 	     (alter channels (fn[chs] (update-in chs [channel] #(conj (set %1) (get-user-id user)))))) 
 	 (let [chs (dosync @channels), ch (get chs channel)]
-	  (doall (map 
-		  #(try-output-to (get (dosync (get @users (get-user-id %1))) :out)
-		      (irc-event user "JOIN" channel "User joined the channel")) ch))
+	  (channel-multicast ch #(irc-event user "JOIN" channel "User joined the channel"))
 	  (irc-reply user "332" "%s :%s" channel (dosync (get @channel-topics channel)))
 	  ;(irc-reply user "333" "%s :none 0" channel)
 	  (irc-reply user "353" "@ %s :%s" channel (join " " ch))
