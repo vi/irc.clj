@@ -2,7 +2,7 @@
 ;;;; Limitations:
 ;;;; 	No server-server connect
 ;;;; 	Only partially implemented basic commands (channel and private messages)
-;;;; 	    no channel modes or topics, no ops, no bans
+;;;; 	    no channel modes, no ops, no bans
 ;;;; 	Straightforward algorithms, no optimisation
 ;;;; Implemented by Vitaly "_Vi" Shukela, 2010; LGPL.
 (import '[java.io BufferedReader InputStreamReader OutputStreamWriter])
@@ -22,6 +22,7 @@
 
 (def users (ref {}))
 (def channels (ref {}))
+(def channel-topics (ref {}))
 
 (defmacro try-output-to [writer# & code] 
  `(try 
@@ -95,11 +96,15 @@
      (if (= (count args) 1)
       (let [channel (lower-case (trim (first args)))]
        (if (re-find #"^#[\#\]\[{}\\|_^a-zA-Z0-9]{0,29}$" channel)
-	(do (dosync (alter channels (fn[chs] (update-in chs [channel] #(conj (set %1) (get-userid user)))))) 
+	(do (dosync 
+	     (alter channel-topics (fn [chs] (update-in chs [channel] #(if %1 %1 ""))))
+	     (alter channels (fn[chs] (update-in chs [channel] #(conj (set %1) (get-userid user)))))) 
 	 (let [chs (dosync @channels), ch (get chs channel)]
 	  (doall (map 
 		  #(try-output-to (get (dosync (get @users (get-userid %1))) :out)
 		      (ircmsg2 user "JOIN" channel "User joined the channel")) ch))
+	  (ircmsg user "332" "%s :%s" channel (dosync (get @channel-topics channel)))
+	  ;(ircmsg user "333" "%s :none 0" channel)
 	  (ircmsg user "353" "@ %s :%s" channel (join " " ch))
 	  (ircmsg user "366" "%s :End of /NAMES list." channel)
 	  ))
@@ -119,6 +124,20 @@
 		(dosync @users)))
 	 (ircmsg user "403" (format "%s :No such channel" channel))))
        (ircmsg user "412" ":Not enough arguments for PART")))
+    (defmethod cmd "TOPIC" [user cmd & args]
+      (if (= (count args) 2)
+       (let [channel (get-userid (lower-case (trim (first args)))), userid (get-userid user), newtopic (second args)
+        result (dosync 
+	    (if (contains? @channels channel)
+	     (do (alter channel-topics (fn[chs] (update-in chs [channel] (fn[_]newtopic)))) true)
+	     false))]
+	(if result
+	 (doall (map 
+		#(try-output-to (get (second %1) :out) 
+		    (ircmsg2 user "TOPIC" channel newtopic))
+		(dosync @users)))
+	 (ircmsg user "403" (format "%s :No such channel" channel))))
+       (ircmsg user "412" ":Invalid arguments for TOPIC")))
     (defmethod cmd "USER" [user cmd & args])
     (defmethod cmd "QUIT" [user cmd & args])
     (defmethod cmd :default [user cmd & args] 
@@ -128,10 +147,10 @@
     (defmethod cmd "PING" [user _ & args]
       (println ":irc.clj PONG irc.lcj :irc.clj"))
     (defmethod cmd "LIST" [user _ & args]
-     (doall (for [[k v] (dosync @channels)] (ircmsg user "322" (format "%s %d :(Topics are not supported)" k (count v))) ))
+     (doall (for [[k v] (dosync @channels)] (ircmsg user "322" (format "%s %d :%s" k (count v) (dosync (get @channel-topics k)))) ))
      (ircmsg user "323" ":End of /LIST"))
     (defmethod cmd "DEBUG" [user _ & args]
-     (ircmsg user "000" (format ": Debug %s" (dosync [@users @channels]))))
+     (ircmsg user "000" (format ": Debug %s" (dosync [@users @channels @channel-topics]))))
 
 (defn process-user-input [user ^String line] 
  (let [result (re-find #"(\w+)(.*)?" line)] 
