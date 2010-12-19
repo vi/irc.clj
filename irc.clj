@@ -117,10 +117,10 @@
 	     (irc-event user "PRIVMSG" recepient message))
 	   (irc-reply user "401" "%s :No such nick/channel" recepient)))))
        (irc-reply user "412" ":There should be exactly two arguments for PRIVMSG")))
-    (defmethod cmd "JOIN" [user cmd & args]
-     (if (= (count args) 1)
-      (let [channel (lower-case (trim (first args)))]
-       (if (re-find #"^#[\#\]\[{}\\|_^a-zA-Z0-9]{0,29}$" channel)
+    (defmethod cmd "JOIN" 
+     ([user cmd channel-name]
+      (let [channel (get-user-id channel-name)]
+       (if (re-find #"^#[\#\]\[{}\\|_^a-z0-9]{0,29}$" channel)
 	(do 
 	 (join-channel! (get-user-id user) channel) 
 	 (let [chs (dosync @channels), ch (get chs channel)]
@@ -130,8 +130,9 @@
 	  (irc-reply user "353" "@ %s :%s" channel (join " " ch))
 	  (irc-reply user "366" "%s :End of /NAMES list." channel)
 	  ))
-	(irc-reply user "479" "%s :Illegal channel name" channel) ))
-      (irc-reply user "412" ":There should be exactly one argument for JOIN")))
+	(irc-reply user "479" "%s :Illegal channel name" channel) )))
+      ([user cmd] (irc-reply user "412" ":Not anought arguments for JOIN"))
+      ([user cmd channel & args] (irc-reply user "412" ":Extra arguments for JOIN")))
     (defmethod cmd "PART" [user cmd & args]
       (if (>= (count args) 1)
        (let [channel (get-user-id (first args)), user-id (get-user-id user)
