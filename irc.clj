@@ -32,8 +32,8 @@
 (defn greet [newuser]
  (ircmsg newuser "001" "Welcome to _Vi's Clojure IRC \"server\"")
  (ircmsg newuser "005" "PREFIX=(ov)@+ NETWORK=demo CHANTYPES=# : are supported by this demo") 
- (ircmsg newuser "251" ":There are %d users on the server." 0)
- (ircmsg newuser "254" "%d :channels formed" 0)
+ (ircmsg newuser "251" ":There are %d users on the server." (count (dosync @users)))
+ (ircmsg newuser "254" "%d :channels formed" (count (dosync @channels)))
  (ircmsg newuser "375" "MoTH"))
 (defn get-userid [nick] (lower-case nick))
 (defn unregister-user [user]
