@@ -4,32 +4,31 @@
 ;;;; 	Only partially implemented basic commands (channel and private messages)
 ;;;; 	    no channel modes, no ops, no bans
 ;;;; 	Straightforward algorithms, no optimisation
-;;;; Implemented by Vitaly "_Vi" Shukela, 2010; LGPL.
+;;;; Implemented by Vitaly "_Vi" Shukela; 2010; MIT License.
 
 (ns irc-demo
  (:import (java.io BufferedReader InputStreamReader OutputStreamWriter))
  (:use clojure.contrib.server-socket)
  (:use [clojure.contrib.string :only [split join upper-case lower-case trim blank?]]))
 
-(defn log [& args] (. java.lang.System/out println (apply str (interpose "|\t" args))))
-
-(defn irc-reply [user code text & args] "Print text like \":irc.clj 251 q :There are 2 users on the server\""
- (locking *out* (print (format ":irc.clj %s %s %s\r\r\n" code user (apply format text args)))))
-(defn ^{:private true} ircmsg2-impl [from cmd msg]
- (locking *out* (print (format ":%s %s %s\r\r\n" from cmd msg)) (flush) ))
-(defn irc-event  "Print text like \":_Vi JOIN #qqq :User joined the channel\""
- ([from cmd solearg] (ircmsg2-impl from cmd (str ":" solearg)))
- ([from cmd arg & args] (ircmsg2-impl from cmd (str (join " " (cons arg (butlast args))) " :" (last args)))))
-
+;; state
 (def users (ref {}))
 (def channels (ref {}))
 (def channel-topics (ref {}))
 
-(defmacro try-output-to [writer# & code] 
- `(try 
-     (binding [*out* ~writer#] 
-      ~@code)
-     (catch Exception e# (.printStackTrace e#))))
+;; print info to stdout (*out* is overridden)
+(defn log [& args] (. java.lang.System/out println (apply str (interpose "|\t" args))))
+
+;; server to client communication
+(defn irc-reply [user code text & args] "Prints text like \":irc.clj 251 q :There are 2 users on the server\""
+ (locking *out* (print (format ":irc.clj %s %s %s\r\r\n" code user (apply format text args)))))
+
+(defn ^{:private true} ircmsg2-impl [from cmd msg]
+ (locking *out* (print (format ":%s %s %s\r\r\n" from cmd msg)) (flush) ))
+
+(defn irc-event  "Print text like \":_Vi JOIN #qqq :User joined the channel\""
+ ([from cmd solearg] (ircmsg2-impl from cmd (str ":" solearg)))
+ ([from cmd arg & args] (ircmsg2-impl from cmd (str (join " " (cons arg (butlast args))) " :" (last args)))))
 
 (defn greet [newuser] "Welcome message for user (after \"NICK\" command)"
  (irc-reply newuser "001" "Welcome to _Vi's Clojure IRC \"server\"")
@@ -37,19 +36,28 @@
  (irc-reply newuser "251" ":There are %d users on the server." (count (dosync @users)))
  (irc-reply newuser "254" "%d :channels formed" (count (dosync @channels)))
  (irc-reply newuser "375" "MoTH"))
-(defn get-user-id [nick] (lower-case (trim nick)))
 
-(defn broadcast [function] "Send message to all users"
+(defmacro try-output-to [writer# & code] 
+ `(try 
+     (binding [*out* ~writer#] 
+      ~@code)
+     (catch Exception e# (.printStackTrace e#))))
+
+(defn broadcast [function] "Send message to all users. Argument is closure to execute."
  (doall (map #(try-output-to (get (second %1) :out) 
 	       (function)) (dosync @users))))
 
-(defn channel-multicast "Send message to all channel participants (except of ignore-user)" 
+(defn channel-multicast "Send message to all channel participants (except of ignore-user). Argument is closure to execute" 
  ([channel function ignore-user]
   (doall (map #(when (not= %1 ignore-user)
 		(try-output-to (get (get (dosync @users) %1) :out) 
 		 (function))) 
 	  channel)))
  ([channel function] (channel-multicast channel function nil)))
+
+
+
+;; state update functions
 
 (defn remove-user! [user-id] 
  (dosync (alter users #(dissoc %1 user-id))))
@@ -77,12 +85,14 @@
   (if (contains? @channels channel)
    (do (alter channel-topics (fn[chs] (update-in chs [channel] (fn[_]new-topic)))) true)
    false)))
- 
-(defn unregister-user [user]
- (let [user-id (get-user-id user)]
-  (remove-user! user-id)
-  (broadcast #(irc-event user "QUIT" user "Connection closed"))
-  (remove-user-from-channels user-id)))
+
+
+
+(defn get-user-id [nick] (lower-case (trim nick)))
+
+
+
+;; IRC command handlers
 
 (defmulti command (fn [^String user command-name & args] command-name))
     (defmethod command "NICK" 
@@ -172,6 +182,13 @@
     (defmethod command "QUIT" [user _ & args])
     (defmethod command "" [user _ & args])
 
+(defn unregister-user [user]
+ (let [user-id (get-user-id user)]
+  (remove-user! user-id)
+  (broadcast #(irc-event user "QUIT" user "Connection closed"))
+  (remove-user-from-channels user-id)))
+
+
 
 (defn parse-irc-command-line [^String line] "Returns vector: command name and it's arguments, all strings. Sole empty string on empty input"
  (let [
@@ -183,13 +200,13 @@
     #_"example: TOPIC #qqq Qqq"      [line                        nil])                        ]
   (into (into [] (split #"\s+" (trim splittable-parameters))) final-parameter-as-vector)))
 
-(defn execute-irc-command-line [user ^String line] "Returns nick (possible updated by \"NICK\" command)"
+(defn execute-irc-command-line [user ^String line] "Returns nick (possibly updated by \"NICK\" command)"
  (let [[command-name-pre & args] (parse-irc-command-line line)
   command-name (upper-case command-name-pre)]
   (if (and (= user "*") (not (contains? #{"NICK", "DEBUG", "QUIT", "PING"} command-name))) 
    (do (irc-reply user "451" ":You are not registered") user)
    (let [new-user (apply command user command-name args)]
-    (if (= command-name "NICK")
+    (if (= command-name "NICK") ; other commands returns garbage
      new-user
      user)))))
 
