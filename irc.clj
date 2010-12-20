@@ -205,7 +205,7 @@
 (defn execute-irc-command-line [user ^String line] "Returns nick (possibly updated by \"NICK\" command)"
  (let [[command-name-pre & args] (parse-irc-command-line line)
   command-name (upper-case command-name-pre)]
-  (if (and (= user "*") (not (contains? #{"NICK", "DEBUG", "QUIT", "PING"} command-name))) 
+  (if (and (= user "*") (not (contains? #{"NICK" "DEBUG" "QUIT" "PING" ""} command-name))) 
    (do (irc-reply user "451" ":You are not registered") user)
    (let [new-user (apply command user command-name args)]
     (if (= command-name "NICK") ; other commands returns garbage
