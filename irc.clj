@@ -4,6 +4,8 @@
 ;;;; 	Only partially implemented basic commands (channel and private messages)
 ;;;; 	    no channel modes, no ops, no bans
 ;;;; 	Straightforward algorithms, no optimisation
+;;;; 	User-id is lowercased nickname. It changes and it is exposed to user instead of nickname.
+;;;;
 ;;;; Implemented by Vitaly "_Vi" Shukela; 2010; MIT License.
 
 (ns irc-demo
