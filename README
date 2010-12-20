@@ -1,0 +1,9 @@
+Simple demo IRC server implemented in Clojure
+
+Provides example for:
+	1. Creating server that listens sockets
+	2. Using Clojure's STM
+	3. Regexes, string comprehensions
+	4. Set and map operations
+	5. Multimethods
+	6. Exception handling
