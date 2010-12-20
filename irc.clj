@@ -157,8 +157,6 @@
       ([user _] (irc-reply user "412" ":Not enought arguments for TOPIC"))
       ([user _ channel] (irc-reply user "412" ":Not enought arguments for TOPIC"))
       ([user _ channel topic & args] (irc-reply user "412" ":Extra arguments for TOPIC")))
-    (defmethod command "USER" [user _ & args])
-    (defmethod command "QUIT" [user _ & args])
     (defmethod command :default [user cmd-name & args] 
      (irc-reply user "421" "%s: Unknown command" cmd-name))
     (defmethod command "TEST" [user & args]
@@ -170,26 +168,30 @@
      (irc-reply user "323" ":End of /LIST"))
     (defmethod command "DEBUG" [user _ & args]
      (irc-reply user "000" (format ": Debug %s" (dosync [@users @channels @channel-topics]))))
+    (defmethod command "USER" [user _ & args])
+    (defmethod command "QUIT" [user _ & args])
+    (defmethod command "" [user _ & args])
 
-(defn execute-irc-command-line [user ^String line] 
- (let [result (re-find #"(\w+)(.*)?" line)] 
-  (if result
-   (let [
-    command-name (trim (upper-case (nth result 1)))
-    params (trim (nth result 2))
-    newuser (let [final-parameter-results (re-find #"(.*):(.*)" params)]
-	(if (and (= user "*") (not (or (= command-name "NICK") (= command-name "DEBUG") (= command-name "QUIT") (= command-name "PING"))))
-	 (do (irc-reply user "451" ":You are not registered") user)
-	 (if final-parameter-results 
-	  (if (blank? (nth final-parameter-results 1))
-	   (apply command [user command-name (nth final-parameter-results 2)])
-	   (apply command (concat [user command-name] (split #"\s+" (nth final-parameter-results 1)) [(nth final-parameter-results 2)])))
-	  (if (blank? params)
-	   (apply command [user command-name])
-	   (apply  command (concat [user command-name] (split #"\s+" params)))))))
-    ]
-    (if (= command-name "NICK") newuser user))
-   user)))
+
+(defn parse-irc-command-line [^String line] "Returns vector: command name and it's arguments, all strings. Sole empty string on empty input"
+ (let [
+  colon-search-result (re-find #"(.*):(.*)" line)
+  ; the list of splittable parameters (including the command name) we need to split by ' ' and the final parameter after ':' (it may be nil)
+  [splittable-parameters final-parameter-as-vector] 
+   (if colon-search-result
+    #_"example: TOPIC #qqq :Qqq qq!" [(nth colon-search-result 1) [(nth colon-search-result 2)]]
+    #_"example: TOPIC #qqq Qqq"      [line                        nil])                        ]
+  (into (into [] (split #"\s+" (trim splittable-parameters))) final-parameter-as-vector)))
+
+(defn execute-irc-command-line [user ^String line] "Returns nick (possible updated by \"NICK\" command)"
+ (let [[command-name-pre & args] (parse-irc-command-line line)
+  command-name (upper-case command-name-pre)]
+  (if (and (= user "*") (not (contains? #{"NICK", "DEBUG", "QUIT", "PING"} command-name))) 
+   (do (irc-reply user "451" ":You are not registered") user)
+   (let [new-user (apply command user command-name args)]
+    (if (= command-name "NICK")
+     new-user
+     user)))))
 
 (defn irc-server []
  (letfn [(irc [in out]
