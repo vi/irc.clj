@@ -171,7 +171,7 @@
 	(broadcast #(irc-event user "TOPIC" channel new-topic))
 	(irc-reply user "403" (format "%s :No such channel" channel)))))
       ([user _] (irc-reply user "412" ":Not enought arguments for TOPIC"))
-      ([user _ channel] (irc-reply user "412" ":Not enought arguments for TOPIC"))
+      ([user _ channel] (irc-reply user "332" "%s :%s" channel (dosync (get @channel-topics channel))))
       ([user _ channel topic & args] (irc-reply user "412" ":Extra arguments for TOPIC")))
     (defmethod command :default [user cmd-name & args] 
      (irc-reply user "421" "%s: Unknown command" cmd-name))
