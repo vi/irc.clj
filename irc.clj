@@ -34,10 +34,14 @@
 
 (defn greet [newuser] "Welcome message for user (after \"NICK\" command)"
  (irc-reply newuser "001" "Welcome to _Vi's Clojure IRC \"server\"")
+ (irc-reply newuser "002" "I don't know what your host is")
+ (irc-reply newuser "003" "I don't know when this server was created")
+ (irc-reply newuser "004" "irc.clj 0.1  ")
  (irc-reply newuser "005" "PREFIX=(ov)@+ NETWORK=demo CHANTYPES=# : are supported by this demo") 
  (irc-reply newuser "251" ":There are %d users on the server." (count (dosync @users)))
  (irc-reply newuser "254" "%d :channels formed" (count (dosync @channels)))
- (irc-reply newuser "375" "MoTH"))
+ (irc-reply newuser "375" "MoTH")
+ (irc-reply newuser "376" "End of MoTH"))
 
 (defmacro try-output-to [writer# & code] 
  `(try 
