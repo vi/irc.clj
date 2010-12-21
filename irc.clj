@@ -212,8 +212,9 @@
   (if (and (= user "*") (not (contains? #{"NICK" "DEBUG" "QUIT" "PING" ""} command-name))) 
    (do (irc-reply user "451" ":You are not registered") user)
    (let [new-user (apply command user command-name args)]
-    (if (= command-name "NICK") ; other commands returns garbage
-     new-user
+    (case command-name 
+     "NICK" new-user
+     "QUIT" (str "~" user)
      user)))))
 
 (defn irc-server []
@@ -223,16 +224,18 @@
 	   (irc-reply "*" "439" ":Supply your NICK to procceed")
 	   (flush)
 	   (loop [user "*"]
-	    (let [line (read-line)]
-	     (if line
-	      (do
-	       (log user line)
-	       (recur (try
-		       (let [user (execute-irc-command-line user line)]
-			(flush)
-			user)
-		       (catch Exception e (.printStackTrace e) (irc-reply user "400" ":Error") (flush) user))))
-	      (unregister-user user))))))]
+	    (if (not= (first user) \~); User becomes "~User" on QUIT command
+	     (let [line (read-line)]
+	      (if line 
+	       (do
+		(log user line)
+		(recur (try
+			(let [user (execute-irc-command-line user line)]
+			 (flush)
+			 user)
+			(catch Exception e (.printStackTrace e) (irc-reply user "400" ":Error") (flush) user))))
+	       (recur (str "~" user))))
+	     (unregister-user (#_"removes the first character" apply str (next user)))))))]
   (create-server 6667 irc)))
 
 (def my-server (irc-server))
