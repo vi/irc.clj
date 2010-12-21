@@ -105,7 +105,7 @@
      ([user _] (irc-reply user "431" ":No nickname given") user)
      ([user _ nick & args] (irc-reply user "431" ":Extra arguments for NICK") user) 
      ([user _ nick]
-       (if (re-find #"^[\]\[{}\\|_^a-zA-Z][\]\[{}\\|_^a-zA-Z0-9]{0,29}$" nick) 
+       (if (re-find #"^[\]\[{}\\|_^a-zA-Z][\]\[{}\\|_^a-zA-Z0-9\-]{0,255}$" nick) 
 	(let [user-id (get-user-id nick)
 	 already-present (add-user! user-id nick)]
 	 (if already-present
@@ -121,7 +121,7 @@
 	     (change-nick-on-all-channels! old-user-id user-id)))
 	   nick)))
 	(do
-	 (irc-reply user "432" "%s :Erroneous Nickname: Nickname should match [][{}\\|_^a-zA-Z][][{}\\|_^a-zA-Z0-9]{0,29}" nick)
+	 (irc-reply user "432" "%s :Erroneous Nickname: Nickname should match [][{}\\|_^a-zA-Z][][{}\\|_^a-zA-Z0-9-]{0,255}" nick)
 	 user))))
     (defmethod command "PRIVMSG" 
      ([user _ recepient message]
