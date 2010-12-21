@@ -23,10 +23,10 @@
 
 ;; server to client communication
 (defn irc-reply [user code text & args] "Prints text like \":irc.clj 251 q :There are 2 users on the server\""
- (locking *out* (print (format ":irc.clj %s %s %s\r\r\n" code user (apply format text args)))))
+ (locking *out* (print (format ":irc.clj %s %s %s\r\n" code user (apply format text args)))))
 
 (defn ^{:private true} ircmsg2-impl [from cmd msg]
- (locking *out* (print (format ":%s %s %s\r\r\n" from cmd msg)) (flush) ))
+ (locking *out* (print (format ":%s %s %s\r\n" from cmd msg)) (flush) ))
 
 (defn irc-event  "Print text like \":_Vi JOIN #qqq :User joined the channel\""
  ([from cmd solearg] (ircmsg2-impl from cmd (str ":" solearg)))
