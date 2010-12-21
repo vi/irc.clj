@@ -186,6 +186,7 @@
      (irc-reply user "000" (format ": Debug %s" (dosync [@users @channels @channel-topics]))))
     (defmethod command "USER" [user _ & args])
     (defmethod command "QUIT" [user _ & args])
+    (defmethod command "MODE" [user _ & args])
     (defmethod command "" [user _ & args])
 
 (defn unregister-user [user]
