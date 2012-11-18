@@ -8,4 +8,9 @@ Provides example for:
 	5. Multimethods
 	6. Exception handling
 
+Starting methods:
+    * lein run
+    * lein uberjar; java -jar irc.clj-*-standalone.jar
+    * java -cp lib/clojure-1.4.0.jar:lib/server-socket-1.0.0.jar clojure.main -e '(load-file "irc.clj") (irc/-main)'
+
 Author page: http://vi-server.org/

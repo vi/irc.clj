@@ -8,10 +8,11 @@
 ;;;;
 ;;;; Implemented by Vitaly "_Vi" Shukela; 2010; MIT License.
 
-(ns irc-demo
+(ns irc
  (:import (java.io BufferedReader InputStreamReader OutputStreamWriter))
- (:use clojure.contrib.server-socket)
- (:use [clojure.contrib.string :only [split join upper-case lower-case trim blank?]]))
+ (:use server.socket)
+ (:use [clojure.string :only [split join upper-case lower-case trim blank?]])
+ (:gen-class))
 
 ;; state
 (def users (ref {}))
@@ -205,7 +206,7 @@
    (if colon-search-result
     #_"example: TOPIC #qqq :Qqq qq!" [(nth colon-search-result 1) [(nth colon-search-result 2)]]
     #_"example: TOPIC #qqq Qqq"      [line                        nil])                        ]
-  (into (into [] (split #"\s+" (trim splittable-parameters))) final-parameter-as-vector)))
+  (into (into [] (split (trim splittable-parameters) #"\s+")) final-parameter-as-vector)))
 
 (defn execute-irc-command-line [user ^String line] "Returns nick (possibly updated by \"NICK\" command)"
  (let [[command-name-pre & args] (parse-irc-command-line line)
@@ -239,4 +240,5 @@
 	     (unregister-user (#_"removes the first character" apply str (next user)))))))]
   (create-server 6667 irc)))
 
-(def my-server (irc-server))
+(defn -main []
+ (def my-server (irc-server)))
