@@ -1,10 +1,10 @@
 ;;;; Demo Clojure IRC server
 ;;;; Limitations:
-;;;; 	No server-server connect
-;;;; 	Only partially implemented basic commands (channel and private messages)
-;;;; 	    no channel modes, no ops, no bans
-;;;; 	Straightforward algorithms, no optimisation
-;;;; 	User-id is lowercased nickname. It changes and it is exposed to user instead of nickname.
+;;;;     No server-server connect
+;;;;     Only partially implemented basic commands (channel and private messages)
+;;;;         no channel modes, no ops, no bans
+;;;;     Straightforward algorithms, no optimisation
+;;;;     User-id is lowercased nickname. It changes and it is exposed to user instead of nickname.
 ;;;;
 ;;;; Implemented by Vitaly "_Vi" Shukela; 2010; MIT License.
 
@@ -52,14 +52,14 @@
 
 (defn broadcast [function] "Send message to all users. Argument is closure to execute."
  (doall (map #(try-output-to (get (second %1) :out) 
-	       (function)) (dosync @users))))
+           (function)) (dosync @users))))
 
 (defn channel-multicast "Send message to all channel participants (except of ignore-user). Argument is closure to execute" 
  ([channel function ignore-user]
   (doall (map #(when (not= %1 ignore-user)
-		(try-output-to (get (get (dosync @users) %1) :out) 
-		 (function))) 
-	  channel)))
+        (try-output-to (get (get (dosync @users) %1) :out) 
+         (function))) 
+      channel)))
  ([channel function] (channel-multicast channel function nil)))
 
 
@@ -107,36 +107,36 @@
      ([user _ nick & args] (irc-reply user "431" ":Extra arguments for NICK") user) 
      ([user _ nick]
        (if (re-find #"^[\]\[{}\\|_^a-zA-Z][\]\[{}\\|_^a-zA-Z0-9\-]{0,255}$" nick) 
-	(let [user-id (get-user-id nick)
-	 already-present (add-user! user-id nick)]
-	 (if already-present
-	  (do 
-	   (irc-reply user "433" "%s :Nickname already in use." nick)
-	   user)
-	  (do 
-	   (if (= user "*")
-	    (greet nick) ; if it is the first "NICK" command in this session then greet user
-	    (let [old-user-id (get-user-id user)] ; else it is renaming
-	     (remove-user! old-user-id)
-	     (broadcast #(irc-event user "NICK" nick))
-	     (change-nick-on-all-channels! old-user-id user-id)))
-	   nick)))
-	(do
-	 (irc-reply user "432" "%s :Erroneous Nickname: Nickname should match [][{}\\|_^a-zA-Z][][{}\\|_^a-zA-Z0-9-]{0,255}" nick)
-	 user))))
+    (let [user-id (get-user-id nick)
+     already-present (add-user! user-id nick)]
+     (if already-present
+      (do 
+       (irc-reply user "433" "%s :Nickname already in use." nick)
+       user)
+      (do 
+       (if (= user "*")
+        (greet nick) ; if it is the first "NICK" command in this session then greet user
+        (let [old-user-id (get-user-id user)] ; else it is renaming
+         (remove-user! old-user-id)
+         (broadcast #(irc-event user "NICK" nick))
+         (change-nick-on-all-channels! old-user-id user-id)))
+       nick)))
+    (do
+     (irc-reply user "432" "%s :Erroneous Nickname: Nickname should match [][{}\\|_^a-zA-Z][][{}\\|_^a-zA-Z0-9-]{0,255}" nick)
+     user))))
     (defmethod command "PRIVMSG" 
      ([user _ recepient message]
       (let [ruser-id (get-user-id recepient)] 
        (if (= (first ruser-id) \#)
-	(let [chs (dosync @channels)]
-	 (if (contains? chs ruser-id)
-	  (channel-multicast (get chs ruser-id) #(irc-event user "PRIVMSG" recepient message) (get-user-id user))
-	  (irc-reply user "401" "%s :No such nick/channel" recepient)))
-	(let [usrs (dosync @users)]
-	 (if (contains? usrs ruser-id)
-	  (try-output-to (get (get usrs ruser-id) :out) 
-	   (irc-event user "PRIVMSG" recepient message))
-	  (irc-reply user "401" "%s :No such nick/channel" recepient))))))
+    (let [chs (dosync @channels)]
+     (if (contains? chs ruser-id)
+      (channel-multicast (get chs ruser-id) #(irc-event user "PRIVMSG" recepient message) (get-user-id user))
+      (irc-reply user "401" "%s :No such nick/channel" recepient)))
+    (let [usrs (dosync @users)]
+     (if (contains? usrs ruser-id)
+      (try-output-to (get (get usrs ruser-id) :out) 
+       (irc-event user "PRIVMSG" recepient message))
+      (irc-reply user "401" "%s :No such nick/channel" recepient))))))
       ([user _] (irc-reply user "412" ":Not enought arguments for PRIVMSG"))
       ([user _ recepient] (irc-reply user "412" ":Not enought arguments for PRIVMSG"))
       ([user _ recepient message & args] (irc-reply user "412" ":Extra arguments for PRIVMSG")))
@@ -144,24 +144,24 @@
      ([user _ channel-name]
       (let [channel (get-user-id channel-name)]
        (if (re-find #"^#[\#\]\[{}\\|_^a-z0-9]{0,29}$" channel)
-	(do 
-	 (join-channel! (get-user-id user) channel) 
-	 (let [chs (dosync @channels), ch (get chs channel)]
-	  (channel-multicast ch #(irc-event user "JOIN" channel "User joined the channel"))
-	  (irc-reply user "332" "%s :%s" channel (dosync (get @channel-topics channel)))
-	  ;(irc-reply user "333" "%s :none 0" channel)
-	  (irc-reply user "353" "@ %s :%s" channel (join " " ch))
-	  (irc-reply user "366" "%s :End of /NAMES list." channel)
-	  ))
-	(irc-reply user "479" "%s :Illegal channel name" channel) )))
+    (do 
+     (join-channel! (get-user-id user) channel) 
+     (let [chs (dosync @channels), ch (get chs channel)]
+      (channel-multicast ch #(irc-event user "JOIN" channel "User joined the channel"))
+      (irc-reply user "332" "%s :%s" channel (dosync (get @channel-topics channel)))
+      ;(irc-reply user "333" "%s :none 0" channel)
+      (irc-reply user "353" "@ %s :%s" channel (join " " ch))
+      (irc-reply user "366" "%s :End of /NAMES list." channel)
+      ))
+    (irc-reply user "479" "%s :Illegal channel name" channel) )))
       ([user _] (irc-reply user "412" ":Not enought arguments for JOIN"))
       ([user _ channel & args] (irc-reply user "412" ":Extra arguments for JOIN")))
     (defmethod command "PART" 
      ([user _ channel-name message]
        (let [channel (get-user-id channel-name), user-id (get-user-id user)]
-	(if(part-channel! user-id channel) 
-	 (broadcast #(irc-event user "PART" channel message))
-	 (irc-reply user "403" "%s :No such channel" channel))))
+    (if(part-channel! user-id channel) 
+     (broadcast #(irc-event user "PART" channel message))
+     (irc-reply user "403" "%s :No such channel" channel))))
       ([user _] (irc-reply user "412" ":Not enought arguments for PART"))
       ([user _ channel message & args] (irc-reply user "412" ":Extra arguments for PART"))
       ([user _ channel] (command user "PART" channel "User have left this channel")))
@@ -169,8 +169,8 @@
      ([user _ channel-name new-topic]
       (let [channel (get-user-id channel-name)]
        (if (update-channel-topic! channel new-topic)
-	(broadcast #(irc-event user "TOPIC" channel new-topic))
-	(irc-reply user "403" (format "%s :No such channel" channel)))))
+    (broadcast #(irc-event user "TOPIC" channel new-topic))
+    (irc-reply user "403" (format "%s :No such channel" channel)))))
       ([user _] (irc-reply user "412" ":Not enought arguments for TOPIC"))
       ([user _ channel] (irc-reply user "332" "%s :%s" channel (dosync (get @channel-topics channel))))
       ([user _ channel topic & args] (irc-reply user "412" ":Extra arguments for TOPIC")))
@@ -221,23 +221,23 @@
 
 (defn irc-server []
  (letfn [(irc [in out]
-	  (binding [*in* (BufferedReader. (InputStreamReader. in))
-	   *out* (OutputStreamWriter. out)]
-	   (irc-reply "*" "439" ":Supply your NICK to procceed")
-	   (flush)
-	   (loop [user "*"]
-	    (if (not= (first user) \~); User becomes "~User" on QUIT command
-	     (let [line (read-line)]
-	      (if line 
-	       (do
-		(log user line)
-		(recur (try
-			(let [user (execute-irc-command-line user line)]
-			 (flush)
-			 user)
-			(catch Exception e (.printStackTrace e) (irc-reply user "400" ":Error") (flush) user))))
-	       (recur (str "~" user))))
-	     (unregister-user (#_"removes the first character" apply str (next user)))))))]
+      (binding [*in* (BufferedReader. (InputStreamReader. in))
+       *out* (OutputStreamWriter. out)]
+       (irc-reply "*" "439" ":Supply your NICK to procceed")
+       (flush)
+       (loop [user "*"]
+        (if (not= (first user) \~); User becomes "~User" on QUIT command
+         (let [line (read-line)]
+          (if line 
+           (do
+        (log user line)
+        (recur (try
+            (let [user (execute-irc-command-line user line)]
+             (flush)
+             user)
+            (catch Exception e (.printStackTrace e) (irc-reply user "400" ":Error") (flush) user))))
+           (recur (str "~" user))))
+         (unregister-user (#_"removes the first character" apply str (next user)))))))]
   (create-server 6667 irc)))
 
 (defn -main []
