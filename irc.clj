@@ -219,7 +219,7 @@
      "QUIT" (str "~" user)
      user)))))
 
-(defn irc-server []
+(defn irc-server [port]
  (letfn [(irc [in out]
       (binding [*in* (BufferedReader. (InputStreamReader. in))
        *out* (OutputStreamWriter. out)]
@@ -238,7 +238,12 @@
             (catch Exception e (.printStackTrace e) (irc-reply user "400" ":Error") (flush) user))))
            (recur (str "~" user))))
          (unregister-user (#_"removes the first character" apply str (next user)))))))]
-  (create-server 6667 irc)))
+  (create-server port irc)))
 
 (defn -main []
- (def my-server (irc-server)))
+ (let [
+   envport (System/getenv "IRC_PORT")
+   port (if envport (Integer. envport) 6667)
+   ]
+ (log (str "IRC_PORT=" envport " ; using port " port))
+ (irc-server port)))
