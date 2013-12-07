@@ -7,5 +7,6 @@
                  ]
    :main irc
    :source-path ""
+   :source-paths [""]
    :omit-source true
 )
